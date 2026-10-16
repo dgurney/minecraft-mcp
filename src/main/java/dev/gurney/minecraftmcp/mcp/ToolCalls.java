@@ -10,6 +10,7 @@ import dev.gurney.minecraftmcp.game.BlockUpdates;
 import dev.gurney.minecraftmcp.game.ClientCatchUp;
 import dev.gurney.minecraftmcp.game.CommandRunner;
 import dev.gurney.minecraftmcp.game.GameThreads;
+import dev.gurney.minecraftmcp.game.MobBrain;
 import dev.gurney.minecraftmcp.game.ScreenCapture;
 import dev.gurney.minecraftmcp.game.StatusReport;
 import dev.gurney.minecraftmcp.game.SurfaceMap;
@@ -57,6 +58,7 @@ final class ToolCalls {
 				case "get_blocks" -> result(false, text(WorldQuery.blocks(blockPos(arguments, "from"), blockPos(arguments, "to"))));
 				case "get_surface" -> result(false, text(surface(arguments)));
 				case "get_entities" -> result(false, text(WorldQuery.entities(arguments.has("radius") ? number(arguments, "radius") : 16)));
+				case "get_mob_brain" -> result(false, text(MobBrain.describe(arguments.has("entity") ? requiredString(arguments, "entity") : null)));
 				case "run_command" -> runCommand(arguments);
 				case "input" -> input(arguments);
 				case "use_block" -> useBlock(arguments);

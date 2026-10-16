@@ -86,7 +86,7 @@
 	{
 		"name": "get_entities",
 		"title": "Get entities",
-		"description": "List entities (mobs, animals, dropped items, players, vehicles...) near the player, nearest first, with position, distance and health.",
+		"description": "List entities (mobs, animals, dropped items, players, vehicles...) near the player, nearest first, with position, distance, health and UUID.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -96,6 +96,25 @@
 					"maximum": 64,
 					"default": 16,
 					"description": "Search radius in blocks."
+				}
+			},
+			"additionalProperties": false
+		},
+		"annotations": {
+			"readOnlyHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
+		"name": "get_mob_brain",
+		"title": "Get mob brain",
+		"description": "Show what a mob's AI is thinking right now, as the server runs it: its attack target, the path it is walking, and then either its brain or its goals. Newer mobs (villagers, piglins, hoglins, axolotls, goats, frogs, allays, wardens, sniffers, camels, armadillos, breezes...) have a brain: active activities (e.g. core, idle, work, rest, panic, fight), running behaviors, and memories such as walk_target, attack_target, home, job_site, nearest_visible_player or hurt_by, with how long until expiring ones are forgotten. Other mobs (zombies, creepers, cows, wolves...) instead pick from goals by priority (lower first), and target goals choose whom to attack; running ones are marked. Watching a mob over several calls shows how it changes its mind. Without entity, describes the mob the player is looking at, up to 64 blocks away. Needs cheats, like run_command.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"entity": {
+					"type": "string",
+					"description": "The mob's UUID (get_entities lists them), or an entity type like \"minecraft:villager\" for the nearest one within 64 blocks."
 				}
 			},
 			"additionalProperties": false

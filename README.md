@@ -27,7 +27,8 @@ A Fabric client mod that runs an [MCP](https://modelcontextprotocol.io) server i
 | `get_status` | Text summary: open screen, position, facing, targeted block, health, inventory, whether commands are available, recent chat. |
 | `get_blocks` | Blocks in a box (up to 4096 positions) as the client has them loaded. |
 | `get_surface` | Top-down map of an area (up to 4096 columns, 25×25 around the player by default): the height and kind of each column's top block, skipping plants and leaves. |
-| `get_entities` | Entities near the player, nearest first. |
+| `get_entities` | Entities near the player, nearest first, with their UUIDs. |
+| `get_mob_brain` | What a mob's AI is thinking: its target and path, then its brain (activities, running behaviors, memories) or its prioritized goals, marking the running ones. Takes a UUID or entity type, or reads the mob the player is looking at. Needs cheats. |
 | `screenshot` | The game window as an image, without the HUD unless asked; menus are always shown. |
 | `run_command` | Runs a command, or a batch of up to 256 in one game tick, as the player and returns the output once the game shows the changes. Fails immediately when cheats are off. |
 | `use_block` | Aims at a block by its coordinates and right-clicks it, like a player would; fails with the reason if it's out of reach or hidden. |

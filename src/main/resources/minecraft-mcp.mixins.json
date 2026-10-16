@@ -3,15 +3,19 @@
 	"package": "dev.gurney.minecraftmcp.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"AvoidEntityGoalAccessor",
 		"ChatComponentMixin",
 		"ClientCommonPacketListenerImplMixin",
 		"GameRendererMixin",
 		"GuiMixin",
 		"IntegratedServerMixin",
 		"KeyMappingAccessor",
+		"LookAtPlayerGoalAccessor",
 		"MinecraftMixin",
 		"MinecraftServerMixin",
-		"MouseHandlerAccessor"
+		"MobAccessor",
+		"MouseHandlerAccessor",
+		"NearestAttackableTargetGoalAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

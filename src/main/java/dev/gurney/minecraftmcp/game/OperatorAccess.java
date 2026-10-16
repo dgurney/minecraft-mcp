@@ -20,6 +20,18 @@ final class OperatorAccess {
 	}
 
 	static <T> ClientCatchUp.Outcome<T> onServer(Function<ServerPlayer, T> work) {
+		record Done<T>(T value, CompletableFuture<Boolean> seen) {
+		}
+		Done<T> done = run(player -> new Done<>(work.apply(player), ClientCatchUp.afterChanges(player)));
+		return new ClientCatchUp.Outcome<>(done.value(), ClientCatchUp.await(done.seen()));
+	}
+
+	/** Like {@link #onServer} for work that only reads the server's world, so there is nothing for the client to catch up on. */
+	static <T> T readOnServer(Function<ServerPlayer, T> work) {
+		return run(work);
+	}
+
+	private static <T> T run(Function<ServerPlayer, T> work) {
 		record Target(IntegratedServer server, UUID player) {
 		}
 		Target target = GameThreads.onClient(() -> {
@@ -34,16 +46,13 @@ final class OperatorAccess {
 			return new Target(server, minecraft.player.getUUID());
 		});
 
-		record Done<T>(T value, CompletableFuture<Boolean> seen) {
-		}
-		Done<T> done = GameThreads.await(target.server().submit(() -> {
+		return GameThreads.await(target.server().submit(() -> {
 			ServerPlayer player = target.server().getPlayerList().getPlayer(target.player());
 			if (player == null) {
 				throw new ToolException("the player is not on the server yet; try again in a moment");
 			}
-			return new Done<>(work.apply(player), ClientCatchUp.afterChanges(player));
+			return work.apply(player);
 		}), SERVER_TIMEOUT_SECONDS, "the server was still busy with this after " + SERVER_TIMEOUT_SECONDS
 			+ "s (or the game is frozen); it may still finish, so check the world before trying again");
-		return new ClientCatchUp.Outcome<>(done.value(), ClientCatchUp.await(done.seen()));
 	}
 }

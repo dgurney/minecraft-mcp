@@ -147,6 +147,7 @@ public final class WorldQuery {
 				if (entity instanceof LivingEntity living) {
 					out.append(String.format(Locale.ROOT, ", health %.1f/%.1f", living.getHealth(), living.getMaxHealth()));
 				}
+				out.append(", uuid ").append(entity.getUUID());
 				out.append('\n');
 			}
 			return out.toString();
