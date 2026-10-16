@@ -6,8 +6,8 @@ A Fabric client mod that runs an [MCP](https://modelcontextprotocol.io) server i
 > **Written with AI.** The code and docs were written by an AI coding agent (Claude Code), with me directing it and testing the result in game. I haven't reviewed the code line by line, so treat it accordingly.
 
 - Endpoint: `http://127.0.0.1:25599/mcp` (Streamable HTTP, MCP revision 2026-07-28 only)
-- Minecraft 26.3, Fabric Loader 0.20.0 or newer, Java 25. Fabric API is not needed.
-- Tested with Minecraft 26.3, Fabric Loader 0.20.0 and Java 25.
+- Minecraft 26.3, Fabric Loader 0.19.0 or newer, Java 25. Fabric API is not needed.
+- Tested with Minecraft 26.3, Fabric Loader 0.19.0 and 0.20.0, and Java 25.
 
 ## Setup
 
