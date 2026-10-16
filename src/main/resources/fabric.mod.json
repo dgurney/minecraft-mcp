@@ -1,0 +1,25 @@
+{
+	"schemaVersion": 1,
+	"id": "minecraft-mcp",
+	"version": "${version}",
+	"name": "Minecraft MCP",
+	"description": "Runs an MCP server inside the game so an agent can see and control the current player.",
+	"authors": [
+		"Daniel Gurney"
+	],
+	"icon": "assets/minecraft-mcp/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"dev.gurney.minecraftmcp.MinecraftMcp"
+		]
+	},
+	"mixins": [
+		"minecraft-mcp.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25"
+	}
+}

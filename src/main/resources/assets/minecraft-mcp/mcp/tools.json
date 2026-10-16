@@ -1,0 +1,207 @@
+[
+	{
+		"name": "get_status",
+		"title": "Get status",
+		"description": "Describe the game state as text: open screen, position, facing, targeted block or entity, health, inventory, whether cheats are enabled, and recent chat.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {},
+			"additionalProperties": false
+		},
+		"annotations": {
+			"readOnlyHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
+		"name": "get_blocks",
+		"title": "Get blocks",
+		"description": "List the blocks in a box between two corners (inclusive), as the player's game has them loaded, grouped by block state in command syntax. Air is only counted. Consecutive blocks along the x axis are merged into runs like \"2..6 75 0\". At most 4096 positions per call; query a single block by passing the same corner twice.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"from": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "One corner as [x, y, z]."
+				},
+				"to": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "The opposite corner as [x, y, z]."
+				}
+			},
+			"required": [
+				"from",
+				"to"
+			],
+			"additionalProperties": false
+		},
+		"annotations": {
+			"readOnlyHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
+		"name": "get_entities",
+		"title": "Get entities",
+		"description": "List entities (mobs, animals, dropped items, players, vehicles...) near the player, nearest first, with position, distance and health.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"radius": {
+					"type": "number",
+					"exclusiveMinimum": 0,
+					"maximum": 64,
+					"default": 16,
+					"description": "Search radius in blocks."
+				}
+			},
+			"additionalProperties": false
+		},
+		"annotations": {
+			"readOnlyHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
+		"name": "screenshot",
+		"title": "Take screenshot",
+		"description": "Capture the game window as an image, along with a short status summary. By default the HUD (hotbar, chat, crosshair) is left out so the world is unobstructed; an open menu, inventory or chat screen is always shown. Cursor coordinates used by the input tool are pixels in this image.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"hud": {
+					"type": "boolean",
+					"default": false,
+					"description": "Include the HUD."
+				}
+			},
+			"additionalProperties": false
+		},
+		"annotations": {
+			"readOnlyHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
+		"name": "run_command",
+		"title": "Run command",
+		"description": "Run a Minecraft command as the player and return its output. Needs cheats (Allow Commands) to be enabled in the world; otherwise it fails immediately, and get_status says whether commands are available. Use /help or /help <command> to discover commands and their syntax.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"command": {
+					"type": "string",
+					"description": "The command, with or without the leading slash, e.g. \"/locate structure minecraft:jungle_pyramid\"."
+				}
+			},
+			"required": [
+				"command"
+			],
+			"additionalProperties": false
+		},
+		"annotations": {
+			"destructiveHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
+		"name": "input",
+		"title": "Send input",
+		"description": "Perform a sequence of keyboard and mouse actions as the player, in order, then return a status summary and (by default) a screenshot. Each action takes at least one game tick (1/20 s); key presses, holds and waits take as many ticks as they say. A sequence can take at most 1200 ticks.\n\nAction types:\n- press {key}: press and release a key or mouse button. Combine modifiers with +, e.g. \"left.control+a\" or \"left.shift+mouse.left\".\n- hold {key, ticks}: hold a key (or + combination) down for the given ticks, e.g. walking forward with w.\n- key_down {key} / key_up {key}: press or release a key and leave it that way across actions, e.g. to keep sprinting.\n- click {x, y, button}: move the cursor to (x, y) in screenshot pixels, then click. button is left (default), right or middle. Without x and y, clicks where the cursor is (in the world: attack/use).\n- move {x, y}: move the cursor without clicking; with a mouse button held down this drags.\n- scroll {amount}: scroll the mouse wheel; positive scrolls up.\n- type {text}: type text into the focused text field (chat, signs, books, search boxes).\n- look {yaw, pitch}: face an absolute direction in degrees; either may be left out to keep the current value.\n- look_at {x, y, z}: face a point in the world. To aim at the middle of a block face, add 0.5 to the block coordinates and then move 0.5 toward the face, e.g. the top of block 3 64 7 is 3.5 65 7.5.\n- wait {ticks}: do nothing for the given ticks.\n\nKey names: letters and digits, space, enter, escape, tab, backspace, left.shift, left.control, left.alt, up, down, left, right, f1-f12, and mouse.left, mouse.right, mouse.middle.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"actions": {
+					"type": "array",
+					"minItems": 1,
+					"items": {
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"press",
+									"hold",
+									"key_down",
+									"key_up",
+									"click",
+									"move",
+									"scroll",
+									"type",
+									"look",
+									"look_at",
+									"wait"
+								]
+							},
+							"key": {
+								"type": "string"
+							},
+							"ticks": {
+								"type": "integer",
+								"minimum": 1
+							},
+							"x": {
+								"type": "number"
+							},
+							"y": {
+								"type": "number"
+							},
+							"button": {
+								"type": "string",
+								"enum": [
+									"left",
+									"right",
+									"middle"
+								]
+							},
+							"amount": {
+								"type": "number"
+							},
+							"text": {
+								"type": "string"
+							},
+							"yaw": {
+								"type": "number"
+							},
+							"pitch": {
+								"type": "number",
+								"minimum": -90,
+								"maximum": 90
+							},
+							"z": {
+								"type": "number"
+							}
+						},
+						"required": [
+							"type"
+						],
+						"additionalProperties": false
+					}
+				},
+				"screenshot": {
+					"type": "boolean",
+					"default": true,
+					"description": "Whether to include a screenshot (without the HUD) taken after the actions."
+				}
+			},
+			"required": [
+				"actions"
+			],
+			"additionalProperties": false
+		},
+		"annotations": {
+			"destructiveHint": true,
+			"openWorldHint": false
+		}
+	}
+]

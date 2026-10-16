@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"package": "dev.gurney.minecraftmcp.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"ChatComponentMixin",
+		"GameRendererMixin",
+		"GuiMixin",
+		"KeyMappingAccessor",
+		"MinecraftMixin",
+		"MouseHandlerAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
