@@ -1,18 +1,25 @@
 package dev.gurney.minecraftmcp.game;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
 
-/** Runs cheat-level work on the integrated server as the current player. Needs cheats to be enabled. */
+/**
+ * Runs cheat-level work on the integrated server as the current player, then waits until the
+ * client has received what it changed. Needs cheats to be enabled.
+ */
 final class OperatorAccess {
+	/** Longer than other waits on the game, since a batch of large /fill commands can take a while. */
+	private static final long SERVER_TIMEOUT_SECONDS = 60;
+
 	private OperatorAccess() {
 	}
 
-	static <T> T onServer(Function<ServerPlayer, T> work) {
+	static <T> ClientCatchUp.Outcome<T> onServer(Function<ServerPlayer, T> work) {
 		record Target(IntegratedServer server, UUID player) {
 		}
 		Target target = GameThreads.onClient(() -> {
@@ -27,12 +34,16 @@ final class OperatorAccess {
 			return new Target(server, minecraft.player.getUUID());
 		});
 
-		return GameThreads.on(target.server(), "server", () -> {
+		record Done<T>(T value, CompletableFuture<Boolean> seen) {
+		}
+		Done<T> done = GameThreads.await(target.server().submit(() -> {
 			ServerPlayer player = target.server().getPlayerList().getPlayer(target.player());
 			if (player == null) {
 				throw new ToolException("the player is not on the server yet; try again in a moment");
 			}
-			return work.apply(player);
-		});
+			return new Done<>(work.apply(player), ClientCatchUp.afterChanges(player));
+		}), SERVER_TIMEOUT_SECONDS, "the server was still busy with this after " + SERVER_TIMEOUT_SECONDS
+			+ "s (or the game is frozen); it may still finish, so check the world before trying again");
+		return new ClientCatchUp.Outcome<>(done.value(), ClientCatchUp.await(done.seen()));
 	}
 }

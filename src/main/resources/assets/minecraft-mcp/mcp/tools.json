@@ -128,18 +128,24 @@
 	{
 		"name": "run_command",
 		"title": "Run command",
-		"description": "Run a Minecraft command as the player and return its output. Needs cheats (Allow Commands) to be enabled in the world; otherwise it fails immediately, and get_status says whether commands are available. Use /help or /help <command> to discover commands and their syntax. Blocks placed with /setblock or /fill don't react to their surroundings (a lamp next to powered dust stays unlit); call update_blocks on them afterwards. Don't flip levers or buttons with /setblock either, since that skips the updates the block would send; use use_block.",
+		"description": "Run Minecraft commands as the player and return their output: one with command, or a batch with commands, which run in order in the same game tick and carry on past any that fail. Prefer one batch to many calls when building. Needs cheats (Allow Commands) to be enabled in the world; otherwise it fails immediately, and get_status says whether commands are available. Use /help or /help <command> to discover commands and their syntax. Blocks placed with /setblock or /fill don't react to their surroundings (a lamp next to powered dust stays unlit); call update_blocks on them afterwards. Don't flip levers or buttons with /setblock either, since that skips the updates the block would send; use use_block. /fill and /setblock report failure (\"No blocks were filled\", \"Could not set the block\") when the blocks already were what they would set, which is harmless. Returns once the game shows the changes, so get_blocks, get_surface and get_entities right after see them, except that after a far /tp the chunks there take a few seconds to load and moved mobs a few ticks to get there. A batch is only an error if every command in it failed.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"command": {
 					"type": "string",
 					"description": "The command, with or without the leading slash, e.g. \"/locate structure minecraft:jungle_pyramid\"."
+				},
+				"commands": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"minItems": 1,
+					"maxItems": 256,
+					"description": "Several commands to run in order instead of command, e.g. the fills of a build."
 				}
 			},
-			"required": [
-				"command"
-			],
 			"additionalProperties": false
 		},
 		"annotations": {

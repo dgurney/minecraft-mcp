@@ -7,6 +7,7 @@ import com.google.gson.JsonPrimitive;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.gurney.minecraftmcp.game.AgentActivity;
 import dev.gurney.minecraftmcp.game.BlockUpdates;
+import dev.gurney.minecraftmcp.game.ClientCatchUp;
 import dev.gurney.minecraftmcp.game.CommandRunner;
 import dev.gurney.minecraftmcp.game.GameThreads;
 import dev.gurney.minecraftmcp.game.ScreenCapture;
@@ -33,6 +34,7 @@ import net.minecraft.world.level.Level;
 /** Implements the tools described in tools.json. Calls are serialized because they all drive one player. */
 final class ToolCalls {
 	private static final int MAX_SEQUENCE_TICKS = 1200;
+	private static final int MAX_COMMANDS = 256;
 	/** Lets the frame showing the last action render before a screenshot is taken. */
 	private static final int SETTLE_TICKS = 2;
 	/** Lets the server act on a click and send the changed block back. */
@@ -85,9 +87,48 @@ final class ToolCalls {
 	}
 
 	private static JsonObject runCommand(JsonObject arguments) {
-		String command = requiredString(arguments, "command");
-		CommandRunner.Result run = CommandRunner.run(command);
-		StringBuilder out = new StringBuilder(run.succeeded() ? "command succeeded" : "command failed");
+		ClientCatchUp.Outcome<List<CommandRunner.Result>> batch = CommandRunner.run(commands(arguments));
+		List<CommandRunner.Result> runs = batch.value();
+		StringBuilder out = new StringBuilder();
+		if (runs.size() == 1) {
+			out.append("command ").append(describe(runs.getFirst(), ""));
+		} else {
+			long failed = runs.stream().filter(run -> !run.succeeded()).count();
+			out.append(runs.size()).append(" commands ran in order, ").append(runs.size() - failed).append(" succeeded and ").append(failed).append(" failed:");
+			for (int i = 0; i < runs.size(); i++) {
+				out.append('\n').append(i + 1).append(". /").append(runs.get(i).command()).append(": ").append(describe(runs.get(i), "   "));
+			}
+		}
+		if (!batch.clientCaughtUp()) {
+			out.append('\n').append(ClientCatchUp.LAGGING_NOTE);
+		}
+		return result(runs.stream().noneMatch(CommandRunner.Result::succeeded), text(out.toString()));
+	}
+
+	private static List<String> commands(JsonObject arguments) {
+		if (arguments.has("command") == arguments.has("commands")) {
+			throw new ToolException("give either command or commands");
+		}
+		if (arguments.has("command")) {
+			return List.of(requiredString(arguments, "command"));
+		}
+		JsonElement commands = arguments.get("commands");
+		if (!commands.isJsonArray() || commands.getAsJsonArray().isEmpty() || commands.getAsJsonArray().size() > MAX_COMMANDS) {
+			throw new ToolException("commands must be an array of 1 to " + MAX_COMMANDS + " strings");
+		}
+		List<String> list = new ArrayList<>();
+		for (JsonElement command : commands.getAsJsonArray()) {
+			if (!command.isJsonPrimitive() || !command.getAsJsonPrimitive().isString()) {
+				throw new ToolException("commands must be an array of 1 to " + MAX_COMMANDS + " strings");
+			}
+			list.add(command.getAsString());
+		}
+		return list;
+	}
+
+	/** E.g. "succeeded (result 9), output:" followed by the output lines, each on its own line after the indent. */
+	private static String describe(CommandRunner.Result run, String indent) {
+		StringBuilder out = new StringBuilder(run.succeeded() ? "succeeded" : "failed");
 		if (!run.results().isEmpty()) {
 			out.append(" (result ").append(run.results().size() == 1 ? run.results().getFirst() : run.results()).append(')');
 		}
@@ -95,9 +136,9 @@ final class ToolCalls {
 			out.append(", no output");
 		} else {
 			out.append(", output:");
-			run.output().forEach(line -> out.append("\n").append(line));
+			run.output().forEach(line -> out.append('\n').append(indent).append(line));
 		}
-		return result(!run.succeeded(), text(out.toString()));
+		return out.toString();
 	}
 
 	private static JsonObject input(JsonObject arguments) {

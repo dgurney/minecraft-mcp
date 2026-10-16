@@ -25,7 +25,7 @@ public final class BlockUpdates {
 		BlockPos min = BlockPos.min(from, to);
 		BlockPos max = BlockPos.max(from, to);
 		WorldQuery.requireBoxSize(min, max);
-		return OperatorAccess.onServer(player -> {
+		ClientCatchUp.Outcome<String> outcome = OperatorAccess.onServer(player -> {
 			ServerLevel level = player.level();
 			// Taken before any update, since updating one block can change others in the box.
 			Map<BlockPos, BlockState> before = new LinkedHashMap<>();
@@ -79,5 +79,6 @@ public final class BlockUpdates {
 			out.append("Torches, repeaters, comparators and lamps turning off react a few ticks later, and the changes spread through connected circuits; check the result with get_blocks.\n");
 			return out.toString();
 		});
+		return outcome.clientCaughtUp() ? outcome.value() : outcome.value() + ClientCatchUp.LAGGING_NOTE;
 	}
 }

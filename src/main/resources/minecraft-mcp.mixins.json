@@ -4,11 +4,13 @@
 	"compatibilityLevel": "JAVA_25",
 	"client": [
 		"ChatComponentMixin",
+		"ClientCommonPacketListenerImplMixin",
 		"GameRendererMixin",
 		"GuiMixin",
 		"IntegratedServerMixin",
 		"KeyMappingAccessor",
 		"MinecraftMixin",
+		"MinecraftServerMixin",
 		"MouseHandlerAccessor"
 	],
 	"injectors": {
