@@ -51,6 +51,39 @@
 		}
 	},
 	{
+		"name": "get_surface",
+		"title": "Get surface",
+		"description": "Map the ground of an area from above, as the player's game has it loaded: a grid with one cell per column giving the y of its top block and a letter for what that block is (e.g. g for grass_block, with a key below). Plants, leaves, snow layers, torches, carpets and the like are skipped, so the cells show the ground under them; water and lava count as the top. Under a roof, or anywhere in the Nether, the top block is the ceiling. Use it to read terrain in one call, e.g. to find a pit or a cleared patch (exposed dirt or stone among grass), see how the ground slopes around it, or choose where to build, then use get_blocks for what's under the surface. Without from and to, maps the 25x25 columns centred on the player. At most 4096 columns per call.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"from": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 2,
+					"maxItems": 2,
+					"description": "One corner column as [x, z]. Give both from and to, or neither."
+				},
+				"to": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 2,
+					"maxItems": 2,
+					"description": "The opposite corner column as [x, z]."
+				}
+			},
+			"additionalProperties": false
+		},
+		"annotations": {
+			"readOnlyHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
 		"name": "get_entities",
 		"title": "Get entities",
 		"description": "List entities (mobs, animals, dropped items, players, vehicles...) near the player, nearest first, with position, distance and health.",

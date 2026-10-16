@@ -153,7 +153,7 @@ public final class WorldQuery {
 		});
 	}
 
-	private static ClientLevel requireLevel() {
+	static ClientLevel requireLevel() {
 		Minecraft minecraft = Minecraft.getInstance();
 		if (minecraft.level == null || minecraft.player == null) {
 			throw new ToolException("not in a world");

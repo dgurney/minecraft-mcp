@@ -73,9 +73,7 @@ public final class StatusReport {
 			player.getX(), player.getY(), player.getZ(), pos.getX(), pos.getY(), pos.getZ(),
 			level.dimension().identifier(),
 			level.getBiome(pos).unwrapKey().map(key -> key.identifier().toString()).orElse("unknown")));
-		// Adding 0 turns -0.0 into 0.0 so it doesn't print as "-0.0".
-		out.append(String.format(Locale.ROOT, "facing: %s (yaw %.1f, pitch %.1f)%n",
-			player.getDirection().getName(), Mth.wrapDegrees(player.getYRot()) + 0f, player.getXRot() + 0f));
+		out.append("facing: ").append(facing(player)).append('\n');
 		out.append("looking at: ").append(describeTarget(minecraft.hitResult, level)).append('\n');
 		out.append(String.format(Locale.ROOT, "health %.1f/%.1f, food %d/20, xp level %d%n",
 			player.getHealth(), player.getMaxHealth(), player.getFoodData().getFoodLevel(), player.experienceLevel));
@@ -108,6 +106,13 @@ public final class StatusReport {
 			chat.forEach(line -> out.append("  ").append(line).append('\n'));
 		}
 		return out.toString();
+	}
+
+	/** E.g. "east (yaw -53.1, pitch 17.2)". */
+	static String facing(LocalPlayer player) {
+		// Adding 0 turns -0.0 into 0.0 so it doesn't print as "-0.0".
+		return String.format(Locale.ROOT, "%s (yaw %.1f, pitch %.1f)",
+			player.getDirection().getName(), Mth.wrapDegrees(player.getYRot()) + 0f, player.getXRot() + 0f);
 	}
 
 	public static String describe(Screen screen) {

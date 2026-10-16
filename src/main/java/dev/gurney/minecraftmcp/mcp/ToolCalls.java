@@ -11,6 +11,7 @@ import dev.gurney.minecraftmcp.game.CommandRunner;
 import dev.gurney.minecraftmcp.game.GameThreads;
 import dev.gurney.minecraftmcp.game.ScreenCapture;
 import dev.gurney.minecraftmcp.game.StatusReport;
+import dev.gurney.minecraftmcp.game.SurfaceMap;
 import dev.gurney.minecraftmcp.game.ToolException;
 import dev.gurney.minecraftmcp.game.VirtualInput;
 import dev.gurney.minecraftmcp.game.WorldQuery;
@@ -52,6 +53,7 @@ final class ToolCalls {
 				case "get_status" -> result(false, text(StatusReport.detailed()));
 				case "screenshot" -> result(false, image(ScreenCapture.captureJpeg(arguments.has("hud") && bool(arguments.get("hud"), "hud"))), text(StatusReport.brief()));
 				case "get_blocks" -> result(false, text(WorldQuery.blocks(blockPos(arguments, "from"), blockPos(arguments, "to"))));
+				case "get_surface" -> result(false, text(surface(arguments)));
 				case "get_entities" -> result(false, text(WorldQuery.entities(arguments.has("radius") ? number(arguments, "radius") : 16)));
 				case "run_command" -> runCommand(arguments);
 				case "input" -> input(arguments);
@@ -71,6 +73,15 @@ final class ToolCalls {
 		UnknownToolException(String name) {
 			super("unknown tool: " + name);
 		}
+	}
+
+	private static String surface(JsonObject arguments) {
+		if (!arguments.has("from") && !arguments.has("to")) {
+			return SurfaceMap.aroundPlayer();
+		}
+		int[] from = coordinates(arguments, "from", "x", "z");
+		int[] to = coordinates(arguments, "to", "x", "z");
+		return SurfaceMap.of(from[0], from[1], to[0], to[1]);
 	}
 
 	private static JsonObject runCommand(JsonObject arguments) {
@@ -264,19 +275,26 @@ final class ToolCalls {
 	}
 
 	private static BlockPos blockPos(JsonObject object, String field) {
+		int[] coordinates = coordinates(object, field, "x", "y", "z");
+		return new BlockPos(coordinates[0], coordinates[1], coordinates[2]);
+	}
+
+	/** Reads an array of whole-number block coordinates along the given axes. */
+	private static int[] coordinates(JsonObject object, String field, String... axes) {
+		String expected = field + " must be an array of " + axes.length + " integers [" + String.join(", ", axes) + "]";
 		JsonElement value = object.get(field);
-		if (value == null || !value.isJsonArray() || value.getAsJsonArray().size() != 3) {
-			throw new ToolException(field + " must be an array of three integers [x, y, z]");
+		if (value == null || !value.isJsonArray() || value.getAsJsonArray().size() != axes.length) {
+			throw new ToolException(expected);
 		}
-		int[] coordinates = new int[3];
-		for (int i = 0; i < 3; i++) {
+		int[] coordinates = new int[axes.length];
+		for (int i = 0; i < axes.length; i++) {
 			JsonElement coordinate = value.getAsJsonArray().get(i);
 			if (!coordinate.isJsonPrimitive() || !coordinate.getAsJsonPrimitive().isNumber() || coordinate.getAsDouble() != Math.rint(coordinate.getAsDouble())) {
-				throw new ToolException(field + " must be an array of three integers [x, y, z]");
+				throw new ToolException(expected);
 			}
 			coordinates[i] = withinWorld(coordinate.getAsDouble(), field + " coordinates");
 		}
-		return new BlockPos(coordinates[0], coordinates[1], coordinates[2]);
+		return coordinates;
 	}
 
 	private static int blockCoordinate(JsonObject object, String field) {
