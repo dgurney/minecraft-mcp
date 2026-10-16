@@ -33,7 +33,8 @@ A Fabric client mod that runs an [MCP](https://modelcontextprotocol.io) server i
 ## Behaviour to know about
 
 - Input goes straight to the game's input handlers, so it works while the game window is in the background. The window must not be minimized for screenshots.
-- While an agent has used a tool in the last 5 minutes, the game doesn't pause when its window loses focus, and keys the agent left held are released once it goes quiet. A game that paused before the agent connected shows the pause menu; the agent is told to press escape.
+- The game never pauses: not when its window loses focus, and not while a menu is open. The mod is meant for a separate instance the agent plays in, not your own play. Opening the pause menu still saves the world, as it did when it paused the game.
+- Keys the agent left held are released once it hasn't used a tool for 5 minutes.
 - Commands the agent runs are shown in chat as `[MCP] /command`, followed by their output.
 - Only one game can run the server at a time; a second instance fails to start with a message saying the port is taken.
 

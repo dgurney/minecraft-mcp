@@ -43,9 +43,6 @@ public final class StatusReport {
 
 		Screen screen = minecraft.gui.screen();
 		out.append("screen: ").append(screen == null ? "none (playing)" : describe(screen)).append('\n');
-		if (minecraft.isPaused()) {
-			out.append("game is PAUSED; press escape to close the pause menu and resume\n");
-		}
 		List<String> heldKeys = VirtualInput.heldKeyNames();
 		if (!heldKeys.isEmpty()) {
 			out.append("keys held down: ").append(String.join(", ", heldKeys)).append('\n');

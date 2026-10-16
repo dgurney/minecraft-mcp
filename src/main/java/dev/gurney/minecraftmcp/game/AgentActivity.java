@@ -1,8 +1,8 @@
 package dev.gurney.minecraftmcp.game;
 
 /**
- * Tracks whether an agent is currently driving the game. While it is, the game behaves as if its
- * window had focus: it does not auto-pause and held attack keeps mining.
+ * Tracks whether an agent is currently driving the game. While it is, held attack keeps mining
+ * without window focus; once it goes quiet, keys it left held are released.
  */
 public final class AgentActivity {
 	private static final long ACTIVE_WINDOW_MILLIS = 5 * 60 * 1000;

@@ -2,6 +2,7 @@ package dev.gurney.minecraftmcp.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.gurney.minecraftmcp.game.AgentActivity;
+import dev.gurney.minecraftmcp.game.PausingMenu;
 import dev.gurney.minecraftmcp.game.VirtualInput;
 import dev.gurney.minecraftmcp.mcp.McpHttpServer;
 import net.minecraft.client.Minecraft;
@@ -22,12 +23,20 @@ abstract class MinecraftMixin {
 		VirtualInput.onTick();
 	}
 
-	/** The user is usually looking at another window while the agent plays, so don't auto-pause. */
+	/** The game is meant to run in its own instance for the agent, out of focus, so it never opens the pause menu by itself. */
 	@Inject(method = "pauseIfInactive", at = @At("HEAD"), cancellable = true)
-	private void minecraftMcp$stayUnpausedForAgent(CallbackInfo ci) {
-		if (AgentActivity.isActive()) {
-			ci.cancel();
-		}
+	private void minecraftMcp$neverPauseUnfocused(CallbackInfo ci) {
+		ci.cancel();
+	}
+
+	/**
+	 * No menu pauses it either. A paused world stands still, yet still runs commands without
+	 * sending the client what they changed, so the agent would read stale blocks.
+	 */
+	@ModifyExpressionValue(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/Gui;isPausing()Z"))
+	private boolean minecraftMcp$neverPauseForMenus(boolean pausing) {
+		PausingMenu.setOpen(pausing);
+		return false;
 	}
 
 	/** Holding attack only keeps mining while the mouse is grabbed, which never happens unfocused. */
