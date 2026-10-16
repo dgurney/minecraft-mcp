@@ -7,6 +7,7 @@ import com.google.gson.JsonPrimitive;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.gurney.minecraftmcp.game.AgentActivity;
 import dev.gurney.minecraftmcp.game.BlockUpdates;
+import dev.gurney.minecraftmcp.game.BlockWatch;
 import dev.gurney.minecraftmcp.game.ClientCatchUp;
 import dev.gurney.minecraftmcp.game.CommandRunner;
 import dev.gurney.minecraftmcp.game.GameThreads;
@@ -63,6 +64,7 @@ final class ToolCalls {
 				case "input" -> input(arguments);
 				case "use_block" -> useBlock(arguments);
 				case "update_blocks" -> result(false, text(BlockUpdates.update(blockPos(arguments, "from"), blockPos(arguments, "to"))));
+				case "watch_blocks" -> result(false, text(startWatch(arguments).await()));
 				default -> throw new UnknownToolException(name);
 			};
 		} catch (ToolException e) {
@@ -89,7 +91,9 @@ final class ToolCalls {
 	}
 
 	private static JsonObject runCommand(JsonObject arguments) {
-		ClientCatchUp.Outcome<List<CommandRunner.Result>> batch = CommandRunner.run(commands(arguments));
+		List<String> commands = commands(arguments);
+		BlockWatch watch = arguments.has("watch") ? startWatch(watchArguments(arguments)) : null;
+		ClientCatchUp.Outcome<List<CommandRunner.Result>> batch = CommandRunner.run(commands);
 		List<CommandRunner.Result> runs = batch.value();
 		StringBuilder out = new StringBuilder();
 		if (runs.size() == 1) {
@@ -103,6 +107,9 @@ final class ToolCalls {
 		}
 		if (!batch.clientCaughtUp()) {
 			out.append('\n').append(ClientCatchUp.LAGGING_NOTE);
+		}
+		if (watch != null) {
+			out.append('\n').append(awaitWatch(watch, "the commands ran"));
 		}
 		return result(runs.stream().noneMatch(CommandRunner.Result::succeeded), text(out.toString()));
 	}
@@ -175,6 +182,7 @@ final class ToolCalls {
 	private static JsonObject useBlock(JsonObject arguments) {
 		BlockPos pos = blockPos(arguments, "pos");
 		Direction face = arguments.has("face") ? face(arguments) : null;
+		JsonObject watchArguments = arguments.has("watch") ? watchArguments(arguments) : null;
 		GameThreads.onClient(() -> {
 			Screen screen = Minecraft.getInstance().gui.screen();
 			if (screen != null) {
@@ -184,6 +192,7 @@ final class ToolCalls {
 		});
 		// Neighbours too: a click can place a block next to this one, or change the other half of a door or bed.
 		Map<BlockPos, String> before = WorldQuery.statesAround(pos);
+		BlockWatch watch = watchArguments == null ? null : startWatch(watchArguments);
 		InputConstants.Key right = VirtualInput.key("mouse.right");
 		if (!runSequence(List.of(
 			new VirtualInput.AimAtBlock(pos, face), new VirtualInput.KeyDown(right), new VirtualInput.KeyUp(right), new VirtualInput.Wait(USE_SETTLE_TICKS)))) {
@@ -199,7 +208,37 @@ final class ToolCalls {
 			out.append("; changed:");
 			changed.forEach(at -> out.append("\n  ").append(WorldQuery.coordinates(at)).append(": ").append(before.get(at)).append(" -> ").append(after.get(at)));
 		}
+		if (watch != null) {
+			out.append('\n').append(awaitWatch(watch, "the click happened"));
+		}
 		return result(false, text(out + "\n" + StatusReport.brief()));
+	}
+
+	private static JsonObject watchArguments(JsonObject arguments) {
+		if (!arguments.get("watch").isJsonObject()) {
+			throw new ToolException("watch must be an object with from, to and optionally ticks");
+		}
+		return arguments.getAsJsonObject("watch");
+	}
+
+	private static BlockWatch startWatch(JsonObject watch) {
+		int ticks = watch.has("ticks") ? positiveInt(watch, "ticks") : BlockWatch.DEFAULT_TICKS;
+		BlockPos from = blockPos(watch, "from");
+		BlockPos to = blockPos(watch, "to");
+		try {
+			return BlockWatch.start(from, to, ticks);
+		} catch (ToolException e) {
+			throw new ToolException("watching failed, so nothing was done: " + e.getMessage());
+		}
+	}
+
+	/** The action itself happened, so a failed watch is reported without making the call an error, which would invite repeating it. */
+	private static String awaitWatch(BlockWatch watch, String done) {
+		try {
+			return watch.await();
+		} catch (ToolException e) {
+			return done + ", but watching failed: " + e.getMessage() + "\n";
+		}
 	}
 
 	/** Runs input steps and waits for them. Returns false if the game stopped ticking after some of them ran. */

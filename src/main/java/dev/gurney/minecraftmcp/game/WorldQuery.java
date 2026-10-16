@@ -35,23 +35,26 @@ public final class WorldQuery {
 
 	/**
 	 * Lists the non-air blocks in the box between two corners, grouped by block state, with runs
-	 * along the x axis merged into "x1..x2 y z". Corners must be within the world's size limit.
+	 * along the x axis merged into "x1..x2 y z". If there is redstone in the box, then lists the
+	 * power of the blocks that have any, which needs cheats. Corners must be within the world's size limit.
 	 */
 	public static String blocks(BlockPos from, BlockPos to) {
 		BlockPos min = BlockPos.min(from, to);
 		BlockPos max = BlockPos.max(from, to);
 		long volume = requireBoxSize(min, max);
-		return GameThreads.onClient(() -> {
+		record Listing(String text, boolean redstone, boolean serverAvailable) {
+		}
+		Listing listing = GameThreads.onClient(() -> {
 			ClientLevel level = requireLevel();
-			Map<String, List<String>> runsByState = new LinkedHashMap<>();
+			Map<BlockState, List<String>> runsByState = new LinkedHashMap<>();
 			int air = 0;
 			int unloaded = 0;
 			for (int y = min.getY(); y <= max.getY(); y++) {
 				for (int z = min.getZ(); z <= max.getZ(); z++) {
-					String runState = null;
+					BlockState runState = null;
 					int runStart = 0;
 					for (int x = min.getX(); x <= max.getX() + 1; x++) {
-						String state = null;
+						BlockState state = null;
 						if (x <= max.getX()) {
 							BlockPos pos = new BlockPos(x, y, z);
 							if (!level.isLoaded(pos)) {
@@ -59,7 +62,7 @@ public final class WorldQuery {
 							} else if (level.getBlockState(pos).isAir()) {
 								air++;
 							} else {
-								state = describe(level.getBlockState(pos));
+								state = level.getBlockState(pos);
 							}
 						}
 						if (state == null ? runState == null : state.equals(runState)) {
@@ -85,9 +88,32 @@ public final class WorldQuery {
 			if (runsByState.isEmpty()) {
 				out.append("no other blocks\n");
 			}
-			runsByState.forEach((state, runs) -> out.append(state).append(": ").append(String.join("; ", runs)).append('\n'));
-			return out.toString();
+			runsByState.forEach((state, runs) -> {
+				out.append(describe(state)).append(": ").append(String.join("; ", runs)).append('\n');
+				String orientation = RedstoneNotes.orientation(state);
+				if (orientation != null) {
+					out.append("  ").append(orientation).append('\n');
+				}
+			});
+			return new Listing(out.toString(), runsByState.keySet().stream().anyMatch(RedstoneNotes::isRedstone), OperatorAccess.available());
 		});
+		if (!listing.redstone()) {
+			return listing.text();
+		}
+		if (!listing.serverAvailable()) {
+			return listing.text() + "redstone power isn't listed without cheats\n";
+		}
+		List<String> power;
+		try {
+			power = OperatorAccess.readOnServer(player -> RedstoneNotes.power(player.level(), min, max));
+		} catch (ToolException e) {
+			// The blocks were read; don't lose them over the power.
+			return listing.text() + "redstone power couldn't be read: " + e.getMessage() + "\n";
+		}
+		if (power.isEmpty()) {
+			return listing.text() + "no block in the box has redstone power\n";
+		}
+		return listing.text() + "redstone power (dust shows its own in its state):\n" + String.join("\n", power) + "\n";
 	}
 
 	/** Block coordinates the way commands write them, e.g. "3 64 -7". */

@@ -16,7 +16,7 @@
 	{
 		"name": "get_blocks",
 		"title": "Get blocks",
-		"description": "List the blocks in a box between two corners (inclusive), as the player's game has them loaded, grouped by block state in command syntax. Air is counted, not listed. Consecutive blocks along the x axis are merged into runs like \"2..6 75 0\". At most 4096 positions per call; query a single block by passing the same corner twice.",
+		"description": "List the blocks in a box between two corners (inclusive), as the player's game has them loaded, grouped by block state in command syntax. Air is counted, not listed. Consecutive blocks along the x axis are merged into runs like \"2..6 75 0\". At most 4096 positions per call; query a single block by passing the same corner twice. Redstone components get a line saying which sides they work with, e.g. a repeater's input and output sides (its facing names its input side). If the box holds redstone, the blocks with power are listed after, as the server has them a moment later, so in a fast circuit they can be a tick apart from the states (this needs cheats): solid blocks as strongly powered (they power the dust and components next to them) or weakly powered by dust (only components); repeaters and comparators with the signal at their input and sides (a powered side locks a repeater; a comparator subtracts or compares it); other components with what they receive from each side; and pistons and dispensers that are powered only through the position above them, or whose state doesn't match their power, since they only react to a change at a block update.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -147,7 +147,7 @@
 	{
 		"name": "run_command",
 		"title": "Run command",
-		"description": "Run Minecraft commands as the player and return their output: one with command, or a batch with commands, which run in order in the same game tick and carry on past any that fail. Prefer one batch to many calls when building. Needs cheats (Allow Commands) to be enabled in the world; otherwise it fails immediately, and get_status says whether commands are available. Use /help or /help <command> to discover commands and their syntax. Blocks placed with /setblock or /fill don't react to their surroundings (a lamp next to powered dust stays unlit); call update_blocks on them afterwards. Don't flip levers or buttons with /setblock either, since that skips the updates the block would send; use use_block. /fill and /setblock report failure (\"No blocks were filled\", \"Could not set the block\") when the blocks already were what they would set, which is harmless. Returns once the game shows the changes, so get_blocks, get_surface and get_entities right after see them, except that after a far /tp the chunks there take a few seconds to load and moved mobs a few ticks to get there. A batch is only an error if every command in it failed.",
+		"description": "Run Minecraft commands as the player and return their output: one with command, or a batch with commands, which run in order in the same game tick and carry on past any that fail. Prefer one batch to many calls when building. Needs cheats (Allow Commands) to be enabled in the world; otherwise it fails immediately, and get_status says whether commands are available. Use /help or /help <command> to discover commands and their syntax. Blocks placed with /setblock or /fill don't react to their surroundings (a lamp next to powered dust stays unlit); call update_blocks on them afterwards. Don't flip levers or buttons with /setblock either, since that skips the updates the block would send; use use_block. /fill and /setblock report failure (\"No blocks were filled\", \"Could not set the block\") when the blocks already were what they would set, which is harmless. Returns once the game shows the changes, so get_blocks, get_surface and get_entities right after see them, except that after a far /tp the chunks there take a few seconds to load and moved mobs a few ticks to get there. A batch is only an error if every command in it failed. With watch, it also records what the commands set off in a circuit, tick by tick.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -163,6 +163,42 @@
 					"minItems": 1,
 					"maxItems": 256,
 					"description": "Several commands to run in order instead of command, e.g. the fills of a build."
+				},
+				"watch": {
+					"type": "object",
+					"properties": {
+						"from": {
+							"type": "array",
+							"items": {
+								"type": "integer"
+							},
+							"minItems": 3,
+							"maxItems": 3,
+							"description": "One corner as [x, y, z]."
+						},
+						"to": {
+							"type": "array",
+							"items": {
+								"type": "integer"
+							},
+							"minItems": 3,
+							"maxItems": 3,
+							"description": "The opposite corner as [x, y, z]."
+						},
+						"ticks": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 1200,
+							"default": 60,
+							"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks, which keep counting under /tick freeze."
+						}
+					},
+					"required": [
+						"from",
+						"to"
+					],
+					"additionalProperties": false,
+					"description": "Also record every change to the blocks in this box, starting just before the commands run, as watch_blocks does. Needs cheats."
 				}
 			},
 			"additionalProperties": false
@@ -175,7 +211,7 @@
 	{
 		"name": "use_block",
 		"title": "Use block",
-		"description": "Aim at a block and right-click it, as the player would: flip a lever, press a button, open a door, chest or crafting table, or use the held item on it (which places a held block against the clicked face). Aims the same way as the input action look_at_block, so the block must be in reach and not hidden behind anything; the error says why if it isn't. Returns what changed at the block and next to it (such as a placed block or the other half of a door), and a status summary.",
+		"description": "Aim at a block and right-click it, as the player would: flip a lever, press a button, open a door, chest or crafting table, or use the held item on it (which places a held block against the clicked face). Aims the same way as the input action look_at_block, so the block must be in reach and not hidden behind anything; the error says why if it isn't. Returns what changed at the block and next to it (such as a placed block or the other half of a door), and a status summary. With watch, it also records what the click sets off, e.g. what a button press does to a circuit, tick by tick.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -199,6 +235,42 @@
 						"west"
 					],
 					"description": "The face to click. Defaults to the visible face pointing most toward the player."
+				},
+				"watch": {
+					"type": "object",
+					"properties": {
+						"from": {
+							"type": "array",
+							"items": {
+								"type": "integer"
+							},
+							"minItems": 3,
+							"maxItems": 3,
+							"description": "One corner as [x, y, z]."
+						},
+						"to": {
+							"type": "array",
+							"items": {
+								"type": "integer"
+							},
+							"minItems": 3,
+							"maxItems": 3,
+							"description": "The opposite corner as [x, y, z]."
+						},
+						"ticks": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 1200,
+							"default": 60,
+							"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks, which keep counting under /tick freeze. The click reaches the server a tick or two after watching starts."
+						}
+					},
+					"required": [
+						"from",
+						"to"
+					],
+					"additionalProperties": false,
+					"description": "Also record every change to the blocks in this box, starting just before the click, as watch_blocks does. Needs cheats."
 				}
 			},
 			"required": [
@@ -347,6 +419,50 @@
 		},
 		"annotations": {
 			"destructiveHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
+		"name": "watch_blocks",
+		"title": "Watch blocks",
+		"description": "Record every change to the blocks in a box over the next ticks, in the order the server makes them: each with the tick it happened in, counted from when watching began, and what changed, e.g. \"tick 2: 16 56 20 minecraft:repeater powered false -> true\". Then lists the positions that ended up different from the start. Use it to see what a circuit does over time, which snapshots from get_blocks miss: a piston can extend and retract between two calls. To see what a button press or a command sets off, give use_block or run_command a watch instead, which starts watching just before acting. Stone buttons stay pressed for 20 ticks and wooden ones for 30, so watch long enough to see the release too. Returns once the ticks have passed. Needs cheats, like run_command.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"from": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "One corner as [x, y, z]."
+				},
+				"to": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "The opposite corner as [x, y, z]."
+				},
+				"ticks": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1200,
+					"default": 60,
+					"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks, which keep counting under /tick freeze."
+				}
+			},
+			"required": [
+				"from",
+				"to"
+			],
+			"additionalProperties": false
+		},
+		"annotations": {
+			"readOnlyHint": true,
 			"openWorldHint": false
 		}
 	}

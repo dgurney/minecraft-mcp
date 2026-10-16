@@ -25,15 +25,16 @@ A Fabric client mod that runs an [MCP](https://modelcontextprotocol.io) server i
 | Tool | What it does |
 | --- | --- |
 | `get_status` | Text summary: open screen, position, facing, targeted block, health, inventory, whether commands are available, recent chat. |
-| `get_blocks` | Blocks in a box (up to 4096 positions) as the client has them loaded. |
+| `get_blocks` | Blocks in a box (up to 4096 positions) as the client has them loaded, with which sides redstone components work with and, with cheats, which blocks are powered. |
 | `get_surface` | Top-down map of an area (up to 4096 columns, 25×25 around the player by default): the height and kind of each column's top block, skipping plants and leaves. |
 | `get_entities` | Entities near the player, nearest first, with their UUIDs. |
 | `get_mob_brain` | What a mob's AI is thinking: its target and path, then its brain (activities, running behaviors, memories) or its prioritized goals, marking the running ones. Takes a UUID or entity type, or reads the mob the player is looking at. Needs cheats. |
 | `screenshot` | The game window as an image, without the HUD unless asked; menus are always shown. |
-| `run_command` | Runs a command, or a batch of up to 256 in one game tick, as the player and returns the output once the game shows the changes. Fails immediately when cheats are off. |
-| `use_block` | Aims at a block by its coordinates and right-clicks it, like a player would; fails with the reason if it's out of reach or hidden. |
+| `run_command` | Runs a command, or a batch of up to 256 in one game tick, as the player and returns the output once the game shows the changes. Can also watch a box, like `watch_blocks`, to see what the commands set off. Fails immediately when cheats are off. |
+| `use_block` | Aims at a block by its coordinates and right-clicks it, like a player would; fails with the reason if it's out of reach or hidden. Can also watch a box, like `watch_blocks`, to see what the click sets off (needs cheats). |
 | `input` | A sequence of key presses/holds, clicks, cursor moves, scrolling, typing, `look`/`look_at`/`look_at_block` and waits, run one step per game tick. |
 | `update_blocks` | Makes the blocks in a box react to their surroundings, which blocks placed by `/setblock` and `/fill` don't do on their own. Needs cheats. |
+| `watch_blocks` | Records every change to the blocks in a box over a number of ticks, in order and tick by tick, e.g. to see what a circuit does. Needs cheats. |
 
 ## Behaviour to know about
 

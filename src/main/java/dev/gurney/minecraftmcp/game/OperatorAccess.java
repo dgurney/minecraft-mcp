@@ -31,6 +31,12 @@ final class OperatorAccess {
 		return run(work);
 	}
 
+	/** Whether {@link #onServer} and {@link #readOnServer} can run: in a singleplayer world with cheats on. Call on the client thread. */
+	static boolean available() {
+		Minecraft minecraft = Minecraft.getInstance();
+		return minecraft.getSingleplayerServer() != null && minecraft.player != null && minecraft.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+	}
+
 	private static <T> T run(Function<ServerPlayer, T> work) {
 		record Target(IntegratedServer server, UUID player) {
 		}
