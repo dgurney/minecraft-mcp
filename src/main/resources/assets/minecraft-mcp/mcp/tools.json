@@ -16,7 +16,7 @@
 	{
 		"name": "get_blocks",
 		"title": "Get blocks",
-		"description": "List the blocks in a box between two corners (inclusive), as the player's game has them loaded, grouped by block state in command syntax. Air is only counted. Consecutive blocks along the x axis are merged into runs like \"2..6 75 0\". At most 4096 positions per call; query a single block by passing the same corner twice.",
+		"description": "List the blocks in a box between two corners (inclusive), as the player's game has them loaded, grouped by block state in command syntax. Air is counted, not listed. Consecutive blocks along the x axis are merged into runs like \"2..6 75 0\". At most 4096 positions per call; query a single block by passing the same corner twice.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {

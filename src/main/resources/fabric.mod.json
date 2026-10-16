@@ -7,7 +7,13 @@
 	"authors": [
 		"Daniel Gurney"
 	],
-	"icon": "assets/minecraft-mcp/icon.png",
+	"contact": {
+		"homepage": "https://github.com/dgurney/minecraft-mcp",
+		"sources": "https://github.com/dgurney/minecraft-mcp",
+		"issues": "https://github.com/dgurney/minecraft-mcp/issues"
+	},
+	"license": "MIT",
+	"icon":"assets/minecraft-mcp/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"client": [
@@ -18,7 +24,7 @@
 		"minecraft-mcp.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.19.5",
+		"fabricloader": ">=0.20.0",
 		"minecraft": "~26.3",
 		"java": ">=25"
 	}
