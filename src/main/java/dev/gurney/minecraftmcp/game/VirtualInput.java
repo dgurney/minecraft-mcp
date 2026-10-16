@@ -298,6 +298,10 @@ public final class VirtualInput {
 	private static void setCursor(Minecraft minecraft, ImagePoint point) {
 		Window window = minecraft.getWindow();
 		ScreenCapture.Size image = ScreenCapture.imageSize(window);
+		if (image.width() == 0 || image.height() == 0) {
+			// Minimized, so there is no image to map from; the cursor is put back once the window is restored.
+			return;
+		}
 		MouseHandlerAccessor mouse = (MouseHandlerAccessor) minecraft.mouseHandler;
 		mouse.minecraftMcp$setXpos(point.x() * window.getScreenWidth() / image.width());
 		mouse.minecraftMcp$setYpos(point.y() * window.getScreenHeight() / image.height());
@@ -305,6 +309,9 @@ public final class VirtualInput {
 
 	private static void moveCursor(Minecraft minecraft, double imageX, double imageY) {
 		Window window = minecraft.getWindow();
+		if (window.isIconified()) {
+			throw new ToolException("cannot move the cursor: the game window is minimized, so there is no screenshot for its coordinates; ask the user to restore it");
+		}
 		restoreAgentCursor(minecraft);
 		double oldGuiX = minecraft.mouseHandler.getScaledXPos(window);
 		double oldGuiY = minecraft.mouseHandler.getScaledYPos(window);

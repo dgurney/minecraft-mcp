@@ -252,7 +252,7 @@ public final class McpHttpServer {
 		}
 		try {
 			String host = URI.create(origin).getHost();
-			return List.of("localhost", "127.0.0.1", "[::1]").contains(host);
+			return host != null && List.of("localhost", "127.0.0.1", "[::1]").contains(host);
 		} catch (IllegalArgumentException e) {
 			return false;
 		}
