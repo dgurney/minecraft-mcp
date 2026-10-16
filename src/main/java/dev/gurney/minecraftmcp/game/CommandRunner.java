@@ -2,16 +2,11 @@ package dev.gurney.minecraftmcp.game;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.commands.CommandResultCallback;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.level.gamerules.GameRules;
 
 /**
@@ -27,25 +22,7 @@ public final class CommandRunner {
 	}
 
 	public static Result run(String command) {
-		record Target(IntegratedServer server, UUID player) {
-		}
-		Target target = GameThreads.onClient(() -> {
-			Minecraft minecraft = Minecraft.getInstance();
-			IntegratedServer server = minecraft.getSingleplayerServer();
-			if (server == null || minecraft.player == null) {
-				throw new ToolException("not in a singleplayer world");
-			}
-			if (!minecraft.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
-				throw new ToolException("commands are unavailable because cheats are off in this world (Allow Commands in the pause menu's World Options); use the other tools instead");
-			}
-			return new Target(server, minecraft.player.getUUID());
-		});
-
-		return GameThreads.on(target.server(), "server", () -> {
-			ServerPlayer player = target.server().getPlayerList().getPlayer(target.player());
-			if (player == null) {
-				throw new ToolException("the player is not on the server yet; try again in a moment");
-			}
+		return OperatorAccess.onServer(player -> {
 			boolean echo = player.level().getGameRules().get(GameRules.SEND_COMMAND_FEEDBACK);
 			List<String> output = new ArrayList<>();
 			List<Integer> results = new ArrayList<>();
@@ -86,7 +63,7 @@ public final class CommandRunner {
 			if (echo) {
 				player.sendSystemMessage(Component.literal("[MCP] /" + trimmed).withStyle(ChatFormatting.GRAY));
 			}
-			target.server().getCommands().performPrefixedCommand(source, trimmed);
+			player.level().getServer().getCommands().performPrefixedCommand(source, trimmed);
 			return new Result(succeeded[0], results, output);
 		});
 	}

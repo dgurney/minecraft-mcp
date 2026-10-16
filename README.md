@@ -25,7 +25,9 @@ A Fabric client mod that runs an [MCP](https://modelcontextprotocol.io) server i
 | `get_entities` | Entities near the player, nearest first. |
 | `screenshot` | The game window as an image, without the HUD unless asked; menus are always shown. |
 | `run_command` | Runs a command as the player and returns its output. Fails immediately when cheats are off. |
-| `input` | A sequence of key presses/holds, clicks, cursor moves, scrolling, typing, `look`/`look_at` and waits, run one step per game tick. |
+| `use_block` | Aims at a block by its coordinates and right-clicks it, like a player would; fails with the reason if it's out of reach or hidden. |
+| `input` | A sequence of key presses/holds, clicks, cursor moves, scrolling, typing, `look`/`look_at`/`look_at_block` and waits, run one step per game tick. |
+| `update_blocks` | Makes the blocks in a box react to their surroundings, which blocks placed by `/setblock` and `/fill` don't do on their own. Needs cheats. |
 
 ## Behaviour to know about
 

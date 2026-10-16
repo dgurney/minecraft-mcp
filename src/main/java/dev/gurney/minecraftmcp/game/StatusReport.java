@@ -42,7 +42,7 @@ public final class StatusReport {
 		out.append("screenshot/cursor coordinates: ").append(image.width()).append('x').append(image.height()).append('\n');
 
 		Screen screen = minecraft.gui.screen();
-		out.append("screen: ").append(screen == null ? "none (playing)" : screen.getClass().getSimpleName() + " \"" + screen.getTitle().getString() + "\"").append('\n');
+		out.append("screen: ").append(screen == null ? "none (playing)" : describe(screen)).append('\n');
 		if (minecraft.isPaused()) {
 			out.append("game is PAUSED; press escape to close the pause menu and resume\n");
 		}
@@ -108,6 +108,10 @@ public final class StatusReport {
 			chat.forEach(line -> out.append("  ").append(line).append('\n'));
 		}
 		return out.toString();
+	}
+
+	public static String describe(Screen screen) {
+		return screen.getClass().getSimpleName() + " \"" + screen.getTitle().getString() + "\"";
 	}
 
 	private static String describeTarget(HitResult hit, ClientLevel level) {

@@ -10,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -39,10 +40,7 @@ public final class WorldQuery {
 	public static String blocks(BlockPos from, BlockPos to) {
 		BlockPos min = BlockPos.min(from, to);
 		BlockPos max = BlockPos.max(from, to);
-		long volume = ((long) max.getX() - min.getX() + 1) * ((long) max.getY() - min.getY() + 1) * ((long) max.getZ() - min.getZ() + 1);
-		if (volume > MAX_BLOCKS) {
-			throw new ToolException("the box contains " + volume + " blocks, more than the limit of " + MAX_BLOCKS + "; query a smaller box");
-		}
+		long volume = requireBoxSize(min, max);
 		return GameThreads.onClient(() -> {
 			ClientLevel level = requireLevel();
 			Map<String, List<String>> runsByState = new LinkedHashMap<>();
@@ -90,6 +88,34 @@ public final class WorldQuery {
 			runsByState.forEach((state, runs) -> out.append(state).append(": ").append(String.join("; ", runs)).append('\n'));
 			return out.toString();
 		});
+	}
+
+	/** Block coordinates the way commands write them, e.g. "3 64 -7". */
+	public static String coordinates(BlockPos pos) {
+		return pos.getX() + " " + pos.getY() + " " + pos.getZ();
+	}
+
+	/** The states of a block and its six neighbours, in command syntax, the block itself first. */
+	public static Map<BlockPos, String> statesAround(BlockPos pos) {
+		return GameThreads.onClient(() -> {
+			ClientLevel level = requireLevel();
+			Map<BlockPos, String> states = new LinkedHashMap<>();
+			states.put(pos, describe(level.getBlockState(pos)));
+			for (Direction direction : Direction.values()) {
+				BlockPos neighbour = pos.relative(direction);
+				states.put(neighbour, describe(level.getBlockState(neighbour)));
+			}
+			return states;
+		});
+	}
+
+	/** Returns the number of positions in the box between two sorted corners, if it is within the limit. */
+	static long requireBoxSize(BlockPos min, BlockPos max) {
+		long volume = ((long) max.getX() - min.getX() + 1) * ((long) max.getY() - min.getY() + 1) * ((long) max.getZ() - min.getZ() + 1);
+		if (volume > MAX_BLOCKS) {
+			throw new ToolException("the box contains " + volume + " blocks, more than the limit of " + MAX_BLOCKS + "; use a smaller box");
+		}
+		return volume;
 	}
 
 	/** Lists entities within the radius of the player, nearest first. */

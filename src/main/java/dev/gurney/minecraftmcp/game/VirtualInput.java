@@ -19,6 +19,8 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.sdl.SDLKeyboard;
@@ -55,6 +57,13 @@ public final class VirtualInput {
 
 	/** Turns the player's view toward a point in the world. */
 	public record LookAt(double x, double y, double z) implements Step {
+	}
+
+	/**
+	 * Aims at a block the way a player would; a null face aims at whichever visible face points most
+	 * toward the player. Takes no tick of its own, so a click right after it uses the aim that was checked.
+	 */
+	public record AimAtBlock(BlockPos pos, Direction face) implements Step {
 	}
 
 	public record Wait(int ticks) implements Step {
@@ -134,7 +143,11 @@ public final class VirtualInput {
 	}
 
 	public static List<String> heldKeyNames() {
-		return held.stream().map(key -> key.getName().replaceFirst("^key\\.(keyboard\\.)?", "")).toList();
+		return held.stream().map(VirtualInput::keyName).toList();
+	}
+
+	private static String keyName(InputConstants.Key key) {
+		return key.getName().replaceFirst("^key\\.(keyboard\\.)?", "");
 	}
 
 	public static void onTick() {
@@ -150,22 +163,42 @@ public final class VirtualInput {
 		if (waitRemaining > 0) {
 			waitRemaining--;
 		} else {
-			Step step = pending.poll();
-			if (step instanceof Wait wait) {
-				waitRemaining = wait.ticks() - 1;
-			} else if (step != null) {
-				try {
-					// Counted before running, since a step like "Save and Quit" can block inside perform for a while.
-					stepsStarted++;
-					perform(Minecraft.getInstance(), step);
-				} catch (ToolException e) {
-					pending.clear();
-					CompletableFuture<Void> done = pendingDone;
-					pendingDone = null;
-					done.completeExceptionally(e);
-					return;
+			Step step;
+			do {
+				step = pending.poll();
+				if (step instanceof Wait wait) {
+					waitRemaining = wait.ticks() - 1;
+				} else if (step != null) {
+					try {
+						// Counted before running, since a step like "Save and Quit" can block inside perform for a while.
+						stepsStarted++;
+						perform(Minecraft.getInstance(), step);
+					} catch (ToolException e) {
+						StringBuilder message = new StringBuilder(e.getMessage());
+						if (stepsStarted > 1) {
+							message.append("; the actions before it ran and the rest were skipped");
+						}
+						// The skipped steps would have released these keys, so don't leave the player walking.
+						List<InputConstants.Key> releasing = new ArrayList<>();
+						for (Step skipped : pending) {
+							if (skipped instanceof KeyUp(InputConstants.Key key) && held.contains(key) && !releasing.contains(key)) {
+								releasing.add(key);
+							}
+						}
+						pending.clear();
+						if (!releasing.isEmpty()) {
+							message.append("; released the keys the rest would have released (").append(String.join(", ", releasing.stream().map(VirtualInput::keyName).toList())).append(')');
+							releasing.forEach(key -> release(Minecraft.getInstance(), key));
+						}
+						CompletableFuture<Void> done = pendingDone;
+						pendingDone = null;
+						done.completeExceptionally(new ToolException(message.toString()));
+						return;
+					}
 				}
-			}
+				// The player moves later in this tick, after the game has handled clicks, so a click in the
+				// next tick could miss what the aim checked.
+			} while (step instanceof AimAtBlock && !(pending.peek() instanceof Wait));
 		}
 		if (pending.isEmpty() && waitRemaining == 0) {
 			finish();
@@ -213,6 +246,7 @@ public final class VirtualInput {
 			case TypeText(String text) -> minecraft.keyboardHandler.textInput(handle, text);
 			case Look(Float yaw, Float pitch) -> look(minecraft, yaw, pitch);
 			case LookAt(double x, double y, double z) -> lookAt(minecraft, x, y, z);
+			case AimAtBlock(BlockPos pos, Direction face) -> BlockAim.aim(minecraft, pos, face);
 			case Wait wait -> throw new IllegalStateException("waits are handled by onTick");
 		}
 	}
@@ -291,7 +325,7 @@ public final class VirtualInput {
 		screen.afterMouseMove();
 	}
 
-	private static void lookAt(Minecraft minecraft, double x, double y, double z) {
+	static void lookAt(Minecraft minecraft, double x, double y, double z) {
 		if (minecraft.player == null) {
 			throw new ToolException("cannot look around: not in a world");
 		}
@@ -304,7 +338,7 @@ public final class VirtualInput {
 		look(minecraft, yaw, pitch);
 	}
 
-	private static void look(Minecraft minecraft, Float yaw, Float pitch) {
+	static void look(Minecraft minecraft, Float yaw, Float pitch) {
 		LocalPlayer player = minecraft.player;
 		if (player == null) {
 			throw new ToolException("cannot look around: not in a world");

@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.gurney.minecraftmcp.game.AgentActivity;
+import dev.gurney.minecraftmcp.game.BlockUpdates;
 import dev.gurney.minecraftmcp.game.CommandRunner;
 import dev.gurney.minecraftmcp.game.GameThreads;
 import dev.gurney.minecraftmcp.game.ScreenCapture;
@@ -16,13 +17,16 @@ import dev.gurney.minecraftmcp.game.WorldQuery;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 
 /** Implements the tools described in tools.json. Calls are serialized because they all drive one player. */
@@ -30,6 +34,8 @@ final class ToolCalls {
 	private static final int MAX_SEQUENCE_TICKS = 1200;
 	/** Lets the frame showing the last action render before a screenshot is taken. */
 	private static final int SETTLE_TICKS = 2;
+	/** Lets the server act on a click and send the changed block back. */
+	private static final int USE_SETTLE_TICKS = 4;
 	private static final long STALL_SECONDS = 10;
 
 	private static final ReentrantLock LOCK = new ReentrantLock(true);
@@ -49,6 +55,8 @@ final class ToolCalls {
 				case "get_entities" -> result(false, text(WorldQuery.entities(arguments.has("radius") ? number(arguments, "radius") : 16)));
 				case "run_command" -> runCommand(arguments);
 				case "input" -> input(arguments);
+				case "use_block" -> useBlock(arguments);
+				case "update_blocks" -> result(false, text(BlockUpdates.update(blockPos(arguments, "from"), blockPos(arguments, "to"))));
 				default -> throw new UnknownToolException(name);
 			};
 		} catch (ToolException e) {
@@ -96,13 +104,8 @@ final class ToolCalls {
 			steps.add(new VirtualInput.Wait(SETTLE_TICKS));
 		}
 
-		if (!awaitSequence(GameThreads.onClient(() -> VirtualInput.run(steps)))) {
-			if (VirtualInput.stepsStarted() == 0) {
-				throw new ToolException("the game stopped ticking for " + STALL_SECONDS + "s before any action ran (is it loading or frozen?); nothing was done");
-			}
-			// Some actions did happen (e.g. a click that started loading a world); an error result would invite repeating them.
-			return result(false, text("part of the sequence ran, then the game stopped ticking for " + STALL_SECONDS
-				+ "s (it may be loading or saving a world); the rest was abandoned and all keys were released. Check the current state before continuing."));
+		if (!runSequence(steps)) {
+			return abandonedSequence();
 		}
 		if (screenshot) {
 			try {
@@ -113,6 +116,53 @@ final class ToolCalls {
 			}
 		}
 		return result(false, text(StatusReport.brief()));
+	}
+
+	private static JsonObject useBlock(JsonObject arguments) {
+		BlockPos pos = blockPos(arguments, "pos");
+		Direction face = arguments.has("face") ? face(arguments) : null;
+		GameThreads.onClient(() -> {
+			Screen screen = Minecraft.getInstance().gui.screen();
+			if (screen != null) {
+				throw new ToolException("a screen is open (" + StatusReport.describe(screen) + "); close it first, e.g. with the input action press escape");
+			}
+			return null;
+		});
+		// Neighbours too: a click can place a block next to this one, or change the other half of a door or bed.
+		Map<BlockPos, String> before = WorldQuery.statesAround(pos);
+		InputConstants.Key right = VirtualInput.key("mouse.right");
+		if (!runSequence(List.of(
+			new VirtualInput.AimAtBlock(pos, face), new VirtualInput.KeyDown(right), new VirtualInput.KeyUp(right), new VirtualInput.Wait(USE_SETTLE_TICKS)))) {
+			return abandonedSequence();
+		}
+		Map<BlockPos, String> after = WorldQuery.statesAround(pos);
+
+		StringBuilder out = new StringBuilder("right-clicked ").append(before.get(pos)).append(" at ").append(WorldQuery.coordinates(pos));
+		List<BlockPos> changed = before.keySet().stream().filter(at -> !before.get(at).equals(after.get(at))).toList();
+		if (changed.isEmpty()) {
+			out.append("; nothing there or next to it changed (it may not react to being used, or the change takes longer)");
+		} else {
+			out.append("; changed:");
+			changed.forEach(at -> out.append("\n  ").append(WorldQuery.coordinates(at)).append(": ").append(before.get(at)).append(" -> ").append(after.get(at)));
+		}
+		return result(false, text(out + "\n" + StatusReport.brief()));
+	}
+
+	/** Runs input steps and waits for them. Returns false if the game stopped ticking after some of them ran. */
+	private static boolean runSequence(List<VirtualInput.Step> steps) {
+		if (awaitSequence(GameThreads.onClient(() -> VirtualInput.run(steps)))) {
+			return true;
+		}
+		if (VirtualInput.stepsStarted() == 0) {
+			throw new ToolException("the game stopped ticking for " + STALL_SECONDS + "s before any action ran (is it loading or frozen?); nothing was done");
+		}
+		return false;
+	}
+
+	/** Some actions did happen (e.g. a click that started loading a world); an error result would invite repeating them. */
+	private static JsonObject abandonedSequence() {
+		return result(false, text("part of the sequence ran, then the game stopped ticking for " + STALL_SECONDS
+			+ "s (it may be loading or saving a world); the rest was abandoned and all keys were released. Check the current state before continuing."));
 	}
 
 	/**
@@ -196,6 +246,9 @@ final class ToolCalls {
 							action.has("pitch") ? (float) number(action, "pitch") : null));
 					}
 					case "look_at" -> steps.add(new VirtualInput.LookAt(number(action, "x"), number(action, "y"), number(action, "z")));
+					case "look_at_block" -> steps.add(new VirtualInput.AimAtBlock(
+						new BlockPos(blockCoordinate(action, "x"), blockCoordinate(action, "y"), blockCoordinate(action, "z")),
+						action.has("face") ? face(action) : null));
 					case "wait" -> steps.add(new VirtualInput.Wait(positiveInt(action, "ticks")));
 					default -> throw new ToolException("unknown action type \"" + type + "\"");
 				}
@@ -221,12 +274,32 @@ final class ToolCalls {
 			if (!coordinate.isJsonPrimitive() || !coordinate.getAsJsonPrimitive().isNumber() || coordinate.getAsDouble() != Math.rint(coordinate.getAsDouble())) {
 				throw new ToolException(field + " must be an array of three integers [x, y, z]");
 			}
-			if (Math.abs(coordinate.getAsDouble()) > Level.MAX_LEVEL_SIZE) {
-				throw new ToolException(field + " coordinates must be within " + Level.MAX_LEVEL_SIZE + " of 0");
-			}
-			coordinates[i] = coordinate.getAsInt();
+			coordinates[i] = withinWorld(coordinate.getAsDouble(), field + " coordinates");
 		}
 		return new BlockPos(coordinates[0], coordinates[1], coordinates[2]);
+	}
+
+	private static int blockCoordinate(JsonObject object, String field) {
+		double value = number(object, field);
+		if (value != Math.rint(value)) {
+			throw new ToolException(field + " must be a whole number (a block coordinate)");
+		}
+		return withinWorld(value, field);
+	}
+
+	private static int withinWorld(double coordinate, String what) {
+		if (Math.abs(coordinate) > Level.MAX_LEVEL_SIZE) {
+			throw new ToolException(what + " must be within " + Level.MAX_LEVEL_SIZE + " of 0");
+		}
+		return (int) coordinate;
+	}
+
+	private static Direction face(JsonObject object) {
+		Direction face = Direction.byName(requiredString(object, "face"));
+		if (face == null) {
+			throw new ToolException("face must be one of up, down, north, south, east, west");
+		}
+		return face;
 	}
 
 	private static String requiredString(JsonObject object, String field) {

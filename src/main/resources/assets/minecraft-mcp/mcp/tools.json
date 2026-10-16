@@ -95,7 +95,7 @@
 	{
 		"name": "run_command",
 		"title": "Run command",
-		"description": "Run a Minecraft command as the player and return its output. Needs cheats (Allow Commands) to be enabled in the world; otherwise it fails immediately, and get_status says whether commands are available. Use /help or /help <command> to discover commands and their syntax.",
+		"description": "Run a Minecraft command as the player and return its output. Needs cheats (Allow Commands) to be enabled in the world; otherwise it fails immediately, and get_status says whether commands are available. Use /help or /help <command> to discover commands and their syntax. Blocks placed with /setblock or /fill don't react to their surroundings (a lamp next to powered dust stays unlit); call update_blocks on them afterwards. Don't flip levers or buttons with /setblock either, since that skips the updates the block would send; use use_block.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -115,9 +115,48 @@
 		}
 	},
 	{
+		"name": "use_block",
+		"title": "Use block",
+		"description": "Aim at a block and right-click it, as the player would: flip a lever, press a button, open a door, chest or crafting table, or use the held item on it (which places a held block against the clicked face). Aims the same way as the input action look_at_block, so the block must be in reach and not hidden behind anything; the error says why if it isn't. Returns what changed at the block and next to it (such as a placed block or the other half of a door), and a status summary.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"pos": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "The block as [x, y, z]."
+				},
+				"face": {
+					"type": "string",
+					"enum": [
+						"up",
+						"down",
+						"north",
+						"south",
+						"east",
+						"west"
+					],
+					"description": "The face to click. Defaults to the visible face pointing most toward the player."
+				}
+			},
+			"required": [
+				"pos"
+			],
+			"additionalProperties": false
+		},
+		"annotations": {
+			"destructiveHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
 		"name": "input",
 		"title": "Send input",
-		"description": "Perform a sequence of keyboard and mouse actions as the player, in order, then return a status summary and (by default) a screenshot. Each action takes at least one game tick (1/20 s); key presses, holds and waits take as many ticks as they say. A sequence can take at most 1200 ticks.\n\nAction types:\n- press {key}: press and release a key or mouse button. Combine modifiers with +, e.g. \"left.control+a\" or \"left.shift+mouse.left\".\n- hold {key, ticks}: hold a key (or + combination) down for the given ticks, e.g. walking forward with w.\n- key_down {key} / key_up {key}: press or release a key and leave it that way across actions, e.g. to keep sprinting.\n- click {x, y, button}: move the cursor to (x, y) in screenshot pixels, then click. button is left (default), right or middle. Without x and y, clicks where the cursor is (in the world: attack/use).\n- move {x, y}: move the cursor without clicking; with a mouse button held down this drags.\n- scroll {amount}: scroll the mouse wheel; positive scrolls up.\n- type {text}: type text into the focused text field (chat, signs, books, search boxes).\n- look {yaw, pitch}: face an absolute direction in degrees; either may be left out to keep the current value.\n- look_at {x, y, z}: face a point in the world. To aim at the middle of a block face, add 0.5 to the block coordinates and then move 0.5 toward the face, e.g. the top of block 3 64 7 is 3.5 65 7.5.\n- wait {ticks}: do nothing for the given ticks.\n\nKey names: letters and digits, space, enter, escape, tab, backspace, left.shift, left.control, left.alt, up, down, left, right, f1-f12, and mouse.left, mouse.right, mouse.middle.",
+		"description": "Perform a sequence of keyboard and mouse actions as the player, in order, then return a status summary and (by default) a screenshot. Each action except look_at_block takes at least one game tick (1/20 s); key presses, holds and waits take as many ticks as they say. A sequence can take at most 1200 ticks.\n\nAction types:\n- press {key}: press and release a key or mouse button. Combine modifiers with +, e.g. \"left.control+a\" or \"left.shift+mouse.left\".\n- hold {key, ticks}: hold a key (or + combination) down for the given ticks, e.g. walking forward with w.\n- key_down {key} / key_up {key}: press or release a key and leave it that way across actions, e.g. to keep sprinting.\n- click {x, y, button}: move the cursor to (x, y) in screenshot pixels, then click. button is left (default), right or middle. Without x and y, clicks where the cursor is (in the world: attack/use).\n- move {x, y}: move the cursor without clicking; with a mouse button held down this drags.\n- scroll {amount}: scroll the mouse wheel; positive scrolls up.\n- type {text}: type text into the focused text field (chat, signs, books, search boxes).\n- look {yaw, pitch}: face an absolute direction in degrees; either may be left out to keep the current value.\n- look_at {x, y, z}: face a point in the world.\n- look_at_block {x, y, z, face}: put the crosshair on the block at these block coordinates, on a part of it that is in reach and not hidden, including thin blocks like levers, buttons and carpets. face (up, down, north, south, east or west) picks the face to aim at, which matters when placing a block against it; without it, the visible face pointing most toward you is used. Fails, and says why, if the block can't be aimed at from where you stand. It takes no tick of its own, so a click right after it, or the first tick of a hold, lands where it aimed even if the player is moving.\n- wait {ticks}: do nothing for the given ticks.\n\nKey names: letters and digits, space, enter, escape, tab, backspace, left.shift, left.control, left.alt, up, down, left, right, f1-f12, and mouse.left, mouse.right, mouse.middle.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -140,6 +179,7 @@
 									"type",
 									"look",
 									"look_at",
+									"look_at_block",
 									"wait"
 								]
 							},
@@ -180,6 +220,17 @@
 							},
 							"z": {
 								"type": "number"
+							},
+							"face": {
+								"type": "string",
+								"enum": [
+									"up",
+									"down",
+									"north",
+									"south",
+									"east",
+									"west"
+								]
 							}
 						},
 						"required": [
@@ -196,6 +247,43 @@
 			},
 			"required": [
 				"actions"
+			],
+			"additionalProperties": false
+		},
+		"annotations": {
+			"destructiveHint": true,
+			"openWorldHint": false
+		}
+	},
+	{
+		"name": "update_blocks",
+		"title": "Update blocks",
+		"description": "Make every block in a box (at most 4096 positions) react to its surroundings as if its neighbours had just changed: redstone components re-check their power, and fences, walls, stairs and redstone dust reconnect to their neighbours. Blocks placed by /setblock and /fill usually don't do this on their own, so e.g. a lamp placed next to powered dust stays unlit until updated. It has the same side effects as real neighbour changes: observers in the box fire once, powered TNT is lit, blocks that lost their support (torches, dust, door halves) break and drop, and sand, gravel and liquids start to fall or flow. Needs cheats, like run_command. Lists the blocks in the box that changed right away.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"from": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "One corner as [x, y, z]."
+				},
+				"to": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "The opposite corner as [x, y, z]."
+				}
+			},
+			"required": [
+				"from",
+				"to"
 			],
 			"additionalProperties": false
 		},
