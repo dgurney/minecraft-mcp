@@ -11,9 +11,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.gamerules.GameRules;
 
 /**
- * Runs commands on the integrated server as the current player, and collects the feedback the
- * command sends back. Feedback is also shown in the player's chat, unless the sendCommandFeedback
- * game rule turns that off. Needs cheats to be enabled.
+ * Runs commands as the current player and collects the feedback they send back. In a world the
+ * game hosts with cheats on, they run on the integrated server directly; otherwise they are sent
+ * to the server, see {@link RemoteCommands}. Feedback is also shown in the player's chat, unless
+ * the sendCommandFeedback game rule turns that off.
  */
 public final class CommandRunner {
 	public record Result(String command, boolean succeeded, List<Integer> results, List<String> output) {
@@ -22,8 +23,11 @@ public final class CommandRunner {
 	private CommandRunner() {
 	}
 
-	/** Runs the commands in order within one server tick, carrying on after any that fail. */
+	/** Runs the commands in order, within one server tick where the server lets us, carrying on after any that fail. */
 	public static ClientCatchUp.Outcome<List<Result>> run(List<String> commands) {
+		if (!GameThreads.onClient(OperatorAccess::available)) {
+			return RemoteCommands.run(commands);
+		}
 		return OperatorAccess.onServer(player -> {
 			List<Result> results = new ArrayList<>();
 			for (String command : commands) {

@@ -6,6 +6,7 @@
 		"AvoidEntityGoalAccessor",
 		"ChatComponentMixin",
 		"ClientCommonPacketListenerImplMixin",
+		"ClientPacketListenerMixin",
 		"DiodeBlockInvoker",
 		"GameRendererMixin",
 		"GuiMixin",

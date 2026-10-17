@@ -9,19 +9,24 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 
 /**
- * Records every change to the blocks in a box on the server, in the order they happen, for a
- * number of ticks. Snapshots taken between tool calls miss most of what a circuit does: a piston
- * can extend and retract between two of them.
+ * Records every change to the blocks in a box, in the order they happen, for a number of ticks.
+ * Snapshots taken between tool calls miss most of what a circuit does: a piston can extend and
+ * retract between two of them.
+ *
+ * <p>In a world the game hosts with cheats on, the changes are recorded on the server as they
+ * happen. Otherwise they are recorded as the client receives them, which is less exact: the
+ * server sends only how each block ended up in each tick, the changes of a tick arrive together,
+ * and the ticks are the client's, which keep in step with the server's but not perfectly.
  */
 public final class BlockWatch {
 	public static final int DEFAULT_TICKS = 60;
@@ -30,6 +35,8 @@ public final class BlockWatch {
 	private static final long STALL_SECONDS = 10;
 
 	private static final List<BlockWatch> ACTIVE = new CopyOnWriteArrayList<>();
+	/** Counts the client's ticks, so the client's changes can be stamped; only touched on the client thread. */
+	private static int clientTicks;
 
 	private record Change(int tick, BlockPos pos, BlockState from, BlockState to) {
 	}
@@ -37,42 +44,49 @@ public final class BlockWatch {
 	private record Done(String text, CompletableFuture<Boolean> seen) {
 	}
 
+	/** The player on the server, or null when watching from the client. */
 	private final ServerPlayer player;
-	private final ServerLevel level;
+	private final Level level;
 	private final BlockPos min;
 	private final BlockPos max;
 	private final int ticks;
 	private final int startTick;
-	/** The first changes, in order; only touched on the server thread. */
+	/** The first changes, in order; only touched on the level's thread. */
 	private final List<Change> changes = new ArrayList<>();
 	private int unlisted;
-	/** What each changed position held before its first change; only touched on the server thread. */
+	/** What each changed position held before its first change; only touched on the level's thread. */
 	private final Map<BlockPos, BlockState> before = new LinkedHashMap<>();
 	private volatile int lastTick;
 	private final CompletableFuture<Done> done = new CompletableFuture<>();
 
-	private BlockWatch(ServerPlayer player, BlockPos min, BlockPos max, int ticks) {
+	private BlockWatch(ServerPlayer player, Level level, BlockPos min, BlockPos max, int ticks) {
 		this.player = player;
-		this.level = player.level();
+		this.level = level;
 		this.min = min;
 		this.max = max;
 		this.ticks = ticks;
-		this.startTick = level.getServer().getTickCount();
+		this.startTick = currentTick();
 		this.lastTick = startTick;
 	}
 
-	/** Starts recording the changes in the box from now on, in the player's dimension. Needs cheats. */
+	/** Starts recording the changes in the box from now on, in the player's dimension. */
 	public static BlockWatch start(BlockPos from, BlockPos to, int ticks) {
-		return OperatorAccess.readOnServer(player -> {
-			BlockWatch watch = new BlockWatch(player, BlockPos.min(from, to), BlockPos.max(from, to), ticks);
-			ACTIVE.add(watch);
-			return watch;
-		});
+		BlockPos min = BlockPos.min(from, to);
+		BlockPos max = BlockPos.max(from, to);
+		if (GameThreads.onClient(OperatorAccess::available)) {
+			return OperatorAccess.readOnServer(player -> activate(new BlockWatch(player, player.level(), min, max, ticks)));
+		}
+		return GameThreads.onClient(() -> activate(new BlockWatch(null, WorldQuery.requireLevel(), min, max, ticks)));
+	}
+
+	private static BlockWatch activate(BlockWatch watch) {
+		ACTIVE.add(watch);
+		return watch;
 	}
 
 	/**
 	 * Waits until the watch has run for its ticks and the client has received the changes, then
-	 * describes them. Gives up only if the server stops ticking, since the tick rate can be changed.
+	 * describes them. Gives up only if the game stops ticking, since the tick rate can be changed.
 	 */
 	public String await() {
 		int seenTick = lastTick;
@@ -87,7 +101,7 @@ public final class BlockWatch {
 					lastProgress = System.nanoTime();
 				} else if (System.nanoTime() - lastProgress > TimeUnit.SECONDS.toNanos(STALL_SECONDS)) {
 					ACTIVE.remove(this);
-					throw new ToolException("the server stopped ticking for " + STALL_SECONDS + "s while watching (is the game loading or frozen?), so the watch was abandoned");
+					throw new ToolException("the game stopped ticking for " + STALL_SECONDS + "s while watching (is it loading or frozen?), so the watch was abandoned");
 				}
 			} catch (ExecutionException e) {
 				if (e.getCause() instanceof ToolException toolException) {
@@ -103,7 +117,7 @@ public final class BlockWatch {
 
 	/** Called for every block change in a loaded chunk, on the client and the server, right as the block changes. */
 	public static void onBlockChanged(Level level, BlockPos pos, BlockState from, BlockState to) {
-		if (ACTIVE.isEmpty() || level.isClientSide() || from == to) {
+		if (ACTIVE.isEmpty() || from == to) {
 			return;
 		}
 		for (BlockWatch watch : ACTIVE) {
@@ -121,19 +135,49 @@ public final class BlockWatch {
 	public static void onServerTickEnd(MinecraftServer server) {
 		int tick = server.getTickCount();
 		for (BlockWatch watch : ACTIVE) {
-			watch.lastTick = tick;
-			if (tick - watch.startTick >= watch.ticks) {
-				watch.finish();
+			if (watch.player != null) {
+				watch.tickEnded(tick);
 			}
+		}
+	}
+
+	/** Called on the client thread at the start of every tick, before the tick's changes; the packets of a server tick arrive between client ticks. */
+	public static void onClientTick() {
+		int tick = ++clientTicks;
+		Level level = Minecraft.getInstance().level;
+		for (BlockWatch watch : ACTIVE) {
+			if (watch.player != null) {
+				continue;
+			}
+			if (watch.level != level) {
+				ACTIVE.remove(watch);
+				watch.done.completeExceptionally(new ToolException(level == null ? "the world was left while watching" : "the player changed dimension while watching, so the box is no longer in view"));
+				continue;
+			}
+			watch.tickEnded(tick);
 		}
 	}
 
 	/** Called on the server thread as it stops; the watches can't finish. */
 	public static void onServerStop() {
 		for (BlockWatch watch : ACTIVE) {
-			ACTIVE.remove(watch);
-			watch.done.completeExceptionally(new ToolException("the world was closed while watching"));
+			if (watch.player != null) {
+				ACTIVE.remove(watch);
+				watch.done.completeExceptionally(new ToolException("the world was closed while watching"));
+			}
 		}
+	}
+
+	private void tickEnded(int tick) {
+		lastTick = tick;
+		if (tick - startTick >= ticks) {
+			ACTIVE.remove(this);
+			done.complete(new Done(describe(), player == null ? CompletableFuture.completedFuture(true) : ClientCatchUp.afterChanges(player)));
+		}
+	}
+
+	private int currentTick() {
+		return player == null ? clientTicks : level.getServer().getTickCount();
 	}
 
 	private boolean contains(BlockPos pos) {
@@ -145,20 +189,18 @@ public final class BlockWatch {
 	private void record(BlockPos pos, BlockState from, BlockState to) {
 		before.putIfAbsent(pos, from);
 		if (changes.size() < MAX_LISTED_CHANGES) {
-			changes.add(new Change(level.getServer().getTickCount() - startTick, pos, from, to));
+			changes.add(new Change(currentTick() - startTick, pos, from, to));
 		} else {
 			unlisted++;
 		}
 	}
 
-	private void finish() {
-		ACTIVE.remove(this);
-		done.complete(new Done(describe(), ClientCatchUp.afterChanges(player)));
-	}
-
 	private String describe() {
 		StringBuilder out = new StringBuilder("watched ").append(WorldQuery.coordinates(min)).append(" to ").append(WorldQuery.coordinates(max))
 			.append(" for ").append(ticks).append(ticks == 1 ? " tick" : " ticks");
+		if (player == null) {
+			out.append(", as the client received the changes (a tick's changes arrive together, and a block that changed twice in one tick shows only how it ended up)");
+		}
 		int total = changes.size() + unlisted;
 		if (total == 0) {
 			return out.append("; nothing in the box changed\n").toString();

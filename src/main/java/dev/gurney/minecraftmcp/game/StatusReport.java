@@ -5,6 +5,7 @@ import java.util.Locale;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.BlockPos;
@@ -59,14 +60,15 @@ public final class StatusReport {
 			out.append("not in a world\n");
 			return out.toString();
 		}
+		boolean operator = player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
 		if (server != null) {
 			out.append("world: \"").append(server.getWorldData().getLevelName()).append("\"\n");
+			out.append("commands: ").append(operator ? "available (cheats enabled)" : "only " + commandNames(player) + " (cheats disabled)").append('\n');
 		} else {
-			out.append("world: multiplayer server (only singleplayer is supported, commands will not work)\n");
+			ServerData data = minecraft.getCurrentServer();
+			out.append("world: multiplayer server").append(data == null ? "" : " \"" + data.name + "\" at " + data.ip).append('\n');
+			out.append("commands: ").append(operator ? "available (operator)" : "only " + commandNames(player) + " (not an operator)").append('\n');
 		}
-		out.append("commands: ").append(player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)
-			? "available (cheats enabled)"
-			: "unavailable (cheats disabled)").append('\n');
 		out.append("game mode: ").append(minecraft.gameMode.getPlayerMode().getName()).append('\n');
 
 		BlockPos pos = player.blockPosition();
@@ -107,6 +109,12 @@ public final class StatusReport {
 			chat.forEach(line -> out.append("  ").append(line).append('\n'));
 		}
 		return out.toString();
+	}
+
+	/** The commands the server lets the player run, e.g. "/help, /list, /me", as it sends only those. */
+	private static String commandNames(LocalPlayer player) {
+		List<String> names = player.connection.getCommands().getRoot().getChildren().stream().map(node -> "/" + node.getName()).sorted().toList();
+		return names.isEmpty() ? "no commands" : String.join(", ", names);
 	}
 
 	/** E.g. "east (yaw -53.1, pitch 17.2)". */

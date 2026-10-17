@@ -10,7 +10,8 @@ import net.minecraft.server.permissions.Permissions;
 
 /**
  * Runs cheat-level work on the integrated server as the current player, then waits until the
- * client has received what it changed. Needs cheats to be enabled.
+ * client has received what it changed. Needs a world the game hosts, with cheats enabled: a
+ * multiplayer server's side of the game is out of reach.
  */
 final class OperatorAccess {
 	/** Longer than other waits on the game, since a batch of large /fill commands can take a while. */
@@ -44,7 +45,7 @@ final class OperatorAccess {
 			Minecraft minecraft = Minecraft.getInstance();
 			IntegratedServer server = minecraft.getSingleplayerServer();
 			if (server == null || minecraft.player == null) {
-				throw new ToolException("not in a singleplayer world");
+				throw new ToolException("this reads the server's side of the game, which only a singleplayer world (hosted by this game) gives access to");
 			}
 			if (!minecraft.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
 				throw new ToolException("this needs cheats, which are off in this world (Allow Commands in the pause menu's World Options); use the other tools instead");

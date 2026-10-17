@@ -2,7 +2,9 @@ package dev.gurney.minecraftmcp.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.gurney.minecraftmcp.game.AgentActivity;
+import dev.gurney.minecraftmcp.game.BlockWatch;
 import dev.gurney.minecraftmcp.game.PausingMenu;
+import dev.gurney.minecraftmcp.game.RemoteCommands;
 import dev.gurney.minecraftmcp.game.VirtualInput;
 import dev.gurney.minecraftmcp.mcp.McpHttpServer;
 import net.minecraft.client.Minecraft;
@@ -19,8 +21,10 @@ abstract class MinecraftMixin {
 	}
 
 	@Inject(method = "tick", at = @At("HEAD"))
-	private void minecraftMcp$runVirtualInput(CallbackInfo ci) {
+	private void minecraftMcp$onTick(CallbackInfo ci) {
 		VirtualInput.onTick();
+		RemoteCommands.onTick();
+		BlockWatch.onClientTick();
 	}
 
 	/** The game is meant to run in its own instance for the agent, out of focus, so it never opens the pause menu by itself. */

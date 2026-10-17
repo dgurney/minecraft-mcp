@@ -70,9 +70,10 @@ final class RedstoneNotes {
 
 	/**
 	 * Describes the power of each solid block and redstone-driven component in the box that gets
-	 * any, one line each, from the server's world: the client isn't told comparators' output or
-	 * what containers hold. Redstone dust is left out, as its state shows its power. Call on the
-	 * server thread.
+	 * any, one line each. Redstone dust is left out, as its state shows its power. Call on the
+	 * level's thread. The server's world is exact; the client's lacks what block entities hold,
+	 * which it isn't told about, so comparators' output, trapped chests' openers and what a
+	 * comparator reads from a container show as nothing.
 	 */
 	static List<String> power(Level level, BlockPos min, BlockPos max) {
 		List<String> lines = new ArrayList<>();

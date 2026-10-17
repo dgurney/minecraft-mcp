@@ -2,7 +2,7 @@
 	{
 		"name": "get_status",
 		"title": "Get status",
-		"description": "Describe the game state as text: open screen, position, facing, targeted block or entity, health, inventory, whether cheats are enabled, and recent chat.",
+		"description": "Describe the game state as text: open screen, position, facing, targeted block or entity, health, inventory, which commands are available, and recent chat.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {},
@@ -16,7 +16,7 @@
 	{
 		"name": "get_blocks",
 		"title": "Get blocks",
-		"description": "List the blocks in a box between two corners (inclusive), as the player's game has them loaded, grouped by block state in command syntax. Air is counted, not listed. Consecutive blocks along the x axis are merged into runs like \"2..6 75 0\". At most 4096 positions per call; query a single block by passing the same corner twice. Redstone components get a line saying which sides they work with, e.g. a repeater's input and output sides (its facing names its input side). If the box holds redstone, the blocks with power are listed after, as the server has them a moment later, so in a fast circuit they can be a tick apart from the states (this needs cheats): solid blocks as strongly powered (they power the dust and components next to them) or weakly powered by dust (only components); repeaters and comparators with the signal at their input and sides (a powered side locks a repeater; a comparator subtracts or compares it); other components with what they receive from each side; and pistons and dispensers that are powered only through the position above them, or whose state doesn't match their power, since they only react to a change at a block update.",
+		"description": "List the blocks in a box between two corners (inclusive), as the player's game has them loaded, grouped by block state in command syntax. Air is counted, not listed. Consecutive blocks along the x axis are merged into runs like \"2..6 75 0\". At most 4096 positions per call; query a single block by passing the same corner twice. Redstone components get a line saying which sides they work with, e.g. a repeater's input and output sides (its facing names its input side). If the box holds redstone, the blocks with power are listed after: from the server's world in a singleplayer world with cheats (a moment later, so in a fast circuit they can be a tick apart from the states), and otherwise as far as the player's game can tell, which isn't sent comparators' output, trapped chests' openers or what containers hold, so comparators and trapped chests show as unpowered and a comparator reading a container shows input 0. Solid blocks as strongly powered (they power the dust and components next to them) or weakly powered by dust (only components); repeaters and comparators with the signal at their input and sides (a powered side locks a repeater; a comparator subtracts or compares it); other components with what they receive from each side; and pistons and dispensers that are powered only through the position above them, or whose state doesn't match their power, since they only react to a change at a block update.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -108,7 +108,7 @@
 	{
 		"name": "get_mob_brain",
 		"title": "Get mob brain",
-		"description": "Show what a mob's AI is thinking right now, as the server runs it: its attack target, the path it is walking, and then either its brain or its goals. Newer mobs (villagers, piglins, hoglins, axolotls, goats, frogs, allays, wardens, sniffers, camels, armadillos, breezes...) have a brain: active activities (e.g. core, idle, work, rest, panic, fight), running behaviors, and memories such as walk_target, attack_target, home, job_site, nearest_visible_player or hurt_by, with how long until expiring ones are forgotten. Other mobs (zombies, creepers, cows, wolves...) instead pick from goals by priority (lower first), and target goals choose whom to attack; running ones are marked. Watching a mob over several calls shows how it changes its mind. Without entity, describes the mob the player is looking at, up to 64 blocks away. Needs cheats, like run_command.",
+		"description": "Show what a mob's AI is thinking right now, as the server runs it: its attack target, the path it is walking, and then either its brain or its goals. Newer mobs (villagers, piglins, hoglins, axolotls, goats, frogs, allays, wardens, sniffers, camels, armadillos, breezes...) have a brain: active activities (e.g. core, idle, work, rest, panic, fight), running behaviors, and memories such as walk_target, attack_target, home, job_site, nearest_visible_player or hurt_by, with how long until expiring ones are forgotten. Other mobs (zombies, creepers, cows, wolves...) instead pick from goals by priority (lower first), and target goals choose whom to attack; running ones are marked. Watching a mob over several calls shows how it changes its mind. Without entity, describes the mob the player is looking at, up to 64 blocks away. Only works in a singleplayer world with cheats: a mob's AI exists only on the server.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -147,7 +147,7 @@
 	{
 		"name": "run_command",
 		"title": "Run command",
-		"description": "Run Minecraft commands as the player and return their output: one with command, or a batch with commands, which run in order in the same game tick and carry on past any that fail. Prefer one batch to many calls when building. Needs cheats (Allow Commands) to be enabled in the world; otherwise it fails immediately, and get_status says whether commands are available. Use /help or /help <command> to discover commands and their syntax. Blocks placed with /setblock or /fill don't react to their surroundings (a lamp next to powered dust stays unlit); call update_blocks on them afterwards. Don't flip levers or buttons with /setblock either, since that skips the updates the block would send; use use_block. /fill and /setblock report failure (\"No blocks were filled\", \"Could not set the block\") when the blocks already were what they would set, which is harmless. Returns once the game shows the changes, so get_blocks, get_surface and get_entities right after see them, except that after a far /tp the chunks there take a few seconds to load and moved mobs a few ticks to get there. A batch is only an error if every command in it failed. With watch, it also records what the commands set off in a circuit, tick by tick.",
+		"description": "Run Minecraft commands as the player and return their output: one with command, or a batch with commands, which run in order (in the same game tick in a singleplayer world with cheats, and usually on a server) and carry on past any that fail. Prefer one batch to many calls when building. Runs whatever the world lets the player run, which get_status lists: everything with cheats (Allow Commands) in a singleplayer world or as an operator on a server; otherwise only the few commands any player has, like /help and /list, one at a time and at most 8 per call. Use /help or /help <command> to discover commands and their syntax. Blocks placed with /setblock or /fill don't react to their surroundings (a lamp next to powered dust stays unlit); call update_blocks on them afterwards. Don't flip levers or buttons with /setblock either, since that skips the updates the block would send; use use_block. /fill and /setblock report failure (\"No blocks were filled\", \"Could not set the block\") when the blocks already were what they would set, which is harmless. Returns once the game shows the changes, so get_blocks, get_surface and get_entities right after see them, except that after a far /tp the chunks there take a few seconds to load and moved mobs a few ticks to get there. A batch is only an error if every command in it failed. On a server, the output is what the server sent to chat while the command ran (its feedback, and any other message that arrived just then), and a command counts as failed if any of it is a command error message. With watch, it also records what the commands set off in a circuit, tick by tick.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -190,7 +190,7 @@
 							"minimum": 1,
 							"maximum": 1200,
 							"default": 60,
-							"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks, which keep counting under /tick freeze."
+							"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks (or on a server, the game's own, in step with them), which keep counting under /tick freeze."
 						}
 					},
 					"required": [
@@ -198,7 +198,7 @@
 						"to"
 					],
 					"additionalProperties": false,
-					"description": "Also record every change to the blocks in this box, starting just before the commands run, as watch_blocks does. Needs cheats."
+					"description": "Also record every change to the blocks in this box, starting just before the commands run, as watch_blocks does."
 				}
 			},
 			"additionalProperties": false
@@ -262,7 +262,7 @@
 							"minimum": 1,
 							"maximum": 1200,
 							"default": 60,
-							"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks, which keep counting under /tick freeze. The click reaches the server a tick or two after watching starts."
+							"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks (or on a server, the game's own, in step with them), which keep counting under /tick freeze. The click reaches the server a tick or two after watching starts."
 						}
 					},
 					"required": [
@@ -270,7 +270,7 @@
 						"to"
 					],
 					"additionalProperties": false,
-					"description": "Also record every change to the blocks in this box, starting just before the click, as watch_blocks does. Needs cheats."
+					"description": "Also record every change to the blocks in this box, starting just before the click, as watch_blocks does."
 				}
 			},
 			"required": [
@@ -388,7 +388,7 @@
 	{
 		"name": "update_blocks",
 		"title": "Update blocks",
-		"description": "Make every block in a box (at most 4096 positions) react to its surroundings as if its neighbours had just changed: redstone components re-check their power, and fences, walls, stairs and redstone dust reconnect to their neighbours. Blocks placed by /setblock and /fill usually don't do this on their own, so e.g. a lamp placed next to powered dust stays unlit until updated. It has the same side effects as real neighbour changes: observers in the box fire once, powered TNT is lit, blocks that lost their support (torches, dust, door halves) break and drop, and sand, gravel and liquids start to fall or flow. Needs cheats, like run_command. Lists the blocks in the box that changed right away.",
+		"description": "Make every block in a box (at most 4096 positions) react to its surroundings as if its neighbours had just changed: redstone components re-check their power, and fences, walls, stairs and redstone dust reconnect to their neighbours. Blocks placed by /setblock and /fill usually don't do this on their own, so e.g. a lamp placed next to powered dust stays unlit until updated. It has the same side effects as real neighbour changes: observers in the box fire once, powered TNT is lit, blocks that lost their support (torches, dust, door halves) break and drop, and sand, gravel and liquids start to fall or flow. Lists the blocks in the box that changed right away. Needs cheats in a singleplayer world, or operator rights on a server, where it works by putting a temporary light block in, and out of, the air in and around the box with /fill, which other players see as a flicker, also updates the blocks just outside the box, only reaches blocks with air next to them (not ones enclosed by other blocks or fluids), and makes redstone components re-check their power and unsupported blocks break, but doesn't reconnect fences, walls, stairs or dust.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -425,7 +425,7 @@
 	{
 		"name": "watch_blocks",
 		"title": "Watch blocks",
-		"description": "Record every change to the blocks in a box over the next ticks, in the order the server makes them: each with the tick it happened in, counted from when watching began, and what changed, e.g. \"tick 2: 16 56 20 minecraft:repeater powered false -> true\". Then lists the positions that ended up different from the start. Use it to see what a circuit does over time, which snapshots from get_blocks miss: a piston can extend and retract between two calls. To see what a button press or a command sets off, give use_block or run_command a watch instead, which starts watching just before acting. Stone buttons stay pressed for 20 ticks and wooden ones for 30, so watch long enough to see the release too. Returns once the ticks have passed. Needs cheats, like run_command.",
+		"description": "Record every change to the blocks in a box over the next ticks, in the order the server makes them: each with the tick it happened in, counted from when watching began, and what changed, e.g. \"tick 2: 16 56 20 minecraft:repeater powered false -> true\". Then lists the positions that ended up different from the start. Use it to see what a circuit does over time, which snapshots from get_blocks miss: a piston can extend and retract between two calls. To see what a button press or a command sets off, give use_block or run_command a watch instead, which starts watching just before acting. Stone buttons stay pressed for 20 ticks and wooden ones for 30, so watch long enough to see the release too. Returns once the ticks have passed. In a singleplayer world with cheats, the changes are recorded on the server as they happen; otherwise as the player's game receives them, which shows only how each block ended up in each tick, with pistons' moves a tick later than the other changes of their tick, and counts the game's own ticks, which keep in step with the server's.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -452,7 +452,7 @@
 					"minimum": 1,
 					"maximum": 1200,
 					"default": 60,
-					"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks, which keep counting under /tick freeze."
+					"description": "How many ticks to watch for (20 ticks = 1 second at the normal tick rate). These are server ticks (or on a server, the game's own, in step with them), which keep counting under /tick freeze."
 				}
 			},
 			"required": [

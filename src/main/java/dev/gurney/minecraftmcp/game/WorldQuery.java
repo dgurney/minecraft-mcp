@@ -36,7 +36,8 @@ public final class WorldQuery {
 	/**
 	 * Lists the non-air blocks in the box between two corners, grouped by block state, with runs
 	 * along the x axis merged into "x1..x2 y z". If there is redstone in the box, then lists the
-	 * power of the blocks that have any, which needs cheats. Corners must be within the world's size limit.
+	 * power of the blocks that have any, from the server's world with cheats and else from the
+	 * client's. Corners must be within the world's size limit.
 	 */
 	public static String blocks(BlockPos from, BlockPos to) {
 		BlockPos min = BlockPos.min(from, to);
@@ -100,20 +101,25 @@ public final class WorldQuery {
 		if (!listing.redstone()) {
 			return listing.text();
 		}
-		if (!listing.serverAvailable()) {
-			return listing.text() + "redstone power isn't listed without cheats\n";
-		}
 		List<String> power;
-		try {
-			power = OperatorAccess.readOnServer(player -> RedstoneNotes.power(player.level(), min, max));
-		} catch (ToolException e) {
-			// The blocks were read; don't lose them over the power.
-			return listing.text() + "redstone power couldn't be read: " + e.getMessage() + "\n";
+		String heading;
+		if (listing.serverAvailable()) {
+			try {
+				power = OperatorAccess.readOnServer(player -> RedstoneNotes.power(player.level(), min, max));
+			} catch (ToolException e) {
+				// The blocks were read; don't lose them over the power.
+				return listing.text() + "redstone power couldn't be read: " + e.getMessage() + "\n";
+			}
+			heading = "redstone power (dust shows its own in its state):";
+		} else {
+			power = GameThreads.onClient(() -> RedstoneNotes.power(requireLevel(), min, max));
+			heading = "redstone power, as far as the client can tell (it isn't told comparators' output or how many players have a trapped chest open, so those show as unpowered,"
+				+ " nor what containers, lecterns and jukeboxes hold, so a comparator reading them shows input 0; dust shows its own in its state):";
 		}
 		if (power.isEmpty()) {
-			return listing.text() + "no block in the box has redstone power\n";
+			return listing.text() + "no block in the box has redstone power" + (listing.serverAvailable() ? "" : " (as far as the client can tell: it isn't told comparators' output or trapped chests' openers)") + "\n";
 		}
-		return listing.text() + "redstone power (dust shows its own in its state):\n" + String.join("\n", power) + "\n";
+		return listing.text() + heading + "\n" + String.join("\n", power) + "\n";
 	}
 
 	/** Block coordinates the way commands write them, e.g. "3 64 -7". */
