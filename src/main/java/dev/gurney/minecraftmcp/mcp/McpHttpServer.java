@@ -21,11 +21,17 @@ import java.util.Objects;
 import java.util.concurrent.Executors;
 
 /**
- * A stateless MCP server (protocol revision 2026-07-28) over Streamable HTTP, answering every
- * request with a single JSON response.
+ * A stateless MCP server over Streamable HTTP, answering every request with a single JSON
+ * response. A request that carries its protocol version in params._meta speaks revision
+ * 2026-07-28; any other request is from an older revision (2025-03-26 to 2025-11-25), which
+ * begins with the initialize handshake instead. The server stays stateless for both: it mints
+ * no session IDs.
  */
 public final class McpHttpServer {
 	private static final String PROTOCOL_VERSION = "2026-07-28";
+	/** The older Streamable HTTP revisions, newest first. They all use the initialize handshake and the optional version header. */
+	private static final List<String> LEGACY_PROTOCOL_VERSIONS = List.of("2025-11-25", "2025-06-18", "2025-03-26");
+	private static final String LATEST_LEGACY_PROTOCOL_VERSION = LEGACY_PROTOCOL_VERSIONS.getFirst();
 	private static final String META_PROTOCOL_VERSION = "io.modelcontextprotocol/protocolVersion";
 	private static final int MAX_BODY_BYTES = 1 << 20;
 	private static final long LIST_TTL_MILLIS = 60 * 60 * 1000;
@@ -55,6 +61,11 @@ public final class McpHttpServer {
 
 	public static void stop() {
 		server.stop(0);
+	}
+
+	/** The port actually bound, for tests, which pass 0 to {@link #start} for an ephemeral one. */
+	static int port() {
+		return server.getAddress().getPort();
 	}
 
 	private static void handle(HttpExchange exchange) throws IOException {
@@ -125,20 +136,32 @@ public final class McpHttpServer {
 				throw new RequestError(400, INVALID_REQUEST, "not a JSON-RPC 2.0 request");
 			}
 			if (id == null) {
-				// This revision defines no client notifications over HTTP; accept and ignore any.
+				// 2026-07-28 defines no client notifications over HTTP; the older revisions do, e.g. notifications/initialized. Accept and ignore any.
 				return new Response(202, null);
 			}
 			String method = stringField(request, "method");
 			JsonObject params = request.has("params") && request.get("params").isJsonObject() ? request.getAsJsonObject("params") : new JsonObject();
-			validateHeaders(exchange, method, params);
+			// 2026-07-28 carries the protocol version in every request body; older revisions carry it, at most, in a header.
+			JsonObject meta = params.has("_meta") && params.get("_meta").isJsonObject() ? params.getAsJsonObject("_meta") : new JsonObject();
+			boolean modern = stringField(meta, META_PROTOCOL_VERSION) != null;
+			if (modern) {
+				validateModernHeaders(exchange, method, params);
+			} else {
+				validateLegacyVersionHeader(exchange);
+			}
 			JsonObject result = switch (method) {
-				case "server/discover" -> discover();
-				case "tools/list" -> listTools();
+				case "server/discover" -> discover(modern);
+				case "tools/list" -> listTools(modern);
 				case "tools/call" -> callTool(params);
+				case "initialize" -> initialize(params);
+				case "ping" -> new JsonObject();
 				default -> throw new RequestError(404, METHOD_NOT_FOUND, "method not found: " + method);
 			};
-			result.addProperty("resultType", "complete");
-			result.add("_meta", serverInfoMeta());
+			if (modern) {
+				// Caching hints and result typing are 2026-07-28 only; older clients must not be shown them.
+				result.addProperty("resultType", "complete");
+				result.add("_meta", serverInfoMeta());
+			}
 			JsonObject response = new JsonObject();
 			response.addProperty("jsonrpc", "2.0");
 			response.add("id", id);
@@ -152,19 +175,14 @@ public final class McpHttpServer {
 		}
 	}
 
-	private static void validateHeaders(HttpExchange exchange, String method, JsonObject params) {
+	/** The 2026-07-28 rules, unchanged: version header required and mirrored in the body, method and name headers matching it. */
+	private static void validateModernHeaders(HttpExchange exchange, String method, JsonObject params) {
 		String headerVersion = exchange.getRequestHeaders().getFirst("MCP-Protocol-Version");
 		if (headerVersion == null) {
-			throw new RequestError(400, HEADER_MISMATCH, "missing MCP-Protocol-Version header; this server only supports MCP protocol version " + PROTOCOL_VERSION);
+			throw new RequestError(400, HEADER_MISMATCH, "missing MCP-Protocol-Version header; " + supportedVersionsText());
 		}
-		// Checked before the body so that older clients, whose requests lack the body field, are told which version to use.
 		if (!headerVersion.equals(PROTOCOL_VERSION)) {
-			JsonObject data = new JsonObject();
-			JsonArray supported = new JsonArray();
-			supported.add(PROTOCOL_VERSION);
-			data.add("supported", supported);
-			data.addProperty("requested", headerVersion);
-			throw new RequestError(400, UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version; this server only supports " + PROTOCOL_VERSION, data);
+			throw new RequestError(400, UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version '" + headerVersion + "'; " + supportedVersionsText(), unsupportedVersionData(headerVersion));
 		}
 		JsonObject meta = params.has("_meta") && params.get("_meta").isJsonObject() ? params.getAsJsonObject("_meta") : new JsonObject();
 		String bodyVersion = stringField(meta, META_PROTOCOL_VERSION);
@@ -184,7 +202,38 @@ public final class McpHttpServer {
 		}
 	}
 
-	private static JsonObject discover() {
+	/**
+	 * The older revisions send no version header at all (2025-03-26, and every revision's initialize request),
+	 * or one of the negotiated legacy versions (2025-06-18 and later). The Mcp-Method and Mcp-Name headers do
+	 * not exist in them and are not checked.
+	 */
+	private static void validateLegacyVersionHeader(HttpExchange exchange) {
+		String headerVersion = exchange.getRequestHeaders().getFirst("MCP-Protocol-Version");
+		if (headerVersion == null || LEGACY_PROTOCOL_VERSIONS.contains(headerVersion)) {
+			return;
+		}
+		if (headerVersion.equals(PROTOCOL_VERSION)) {
+			// A 2026-07-28 claim must also be carried in the request body; keep that revision's own error for it.
+			throw new RequestError(400, HEADER_MISMATCH, "MCP-Protocol-Version header '" + headerVersion + "' does not match params._meta[\"" + META_PROTOCOL_VERSION + "\"] 'null'");
+		}
+		throw new RequestError(400, UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version '" + headerVersion + "'; " + supportedVersionsText(), unsupportedVersionData(headerVersion));
+	}
+
+	private static String supportedVersionsText() {
+		return "this server supports " + PROTOCOL_VERSION + " and the older revisions " + String.join(", ", LEGACY_PROTOCOL_VERSIONS);
+	}
+
+	private static JsonObject unsupportedVersionData(String requested) {
+		JsonObject data = new JsonObject();
+		JsonArray supported = new JsonArray();
+		supported.add(PROTOCOL_VERSION);
+		LEGACY_PROTOCOL_VERSIONS.forEach(supported::add);
+		data.add("supported", supported);
+		data.addProperty("requested", requested);
+		return data;
+	}
+
+	private static JsonObject discover(boolean modern) {
 		JsonObject result = new JsonObject();
 		JsonArray versions = new JsonArray();
 		versions.add(PROTOCOL_VERSION);
@@ -193,22 +242,46 @@ public final class McpHttpServer {
 		capabilities.add("tools", new JsonObject());
 		result.add("capabilities", capabilities);
 		result.addProperty("instructions", INSTRUCTIONS);
-		result.addProperty("ttlMs", LIST_TTL_MILLIS);
-		result.addProperty("cacheScope", "private");
+		if (modern) {
+			result.addProperty("ttlMs", LIST_TTL_MILLIS);
+			result.addProperty("cacheScope", "private");
+		}
 		return result;
 	}
 
-	private static JsonObject listTools() {
+	private static JsonObject listTools(boolean modern) {
 		JsonObject result = new JsonObject();
 		result.add("tools", TOOLS.deepCopy());
-		result.addProperty("ttlMs", LIST_TTL_MILLIS);
-		result.addProperty("cacheScope", "private");
+		if (modern) {
+			result.addProperty("ttlMs", LIST_TTL_MILLIS);
+			result.addProperty("cacheScope", "private");
+		}
 		return result;
 	}
 
-	/** Only called once header validation has confirmed params.name is a string. */
+	/** The initialize handshake of the older revisions: answer with the client's version when it is one this server speaks, else the newest one it does. */
+	private static JsonObject initialize(JsonObject params) {
+		String requested = stringField(params, "protocolVersion");
+		String negotiated = requested != null && LEGACY_PROTOCOL_VERSIONS.contains(requested) ? requested : LATEST_LEGACY_PROTOCOL_VERSION;
+		JsonObject result = new JsonObject();
+		result.addProperty("protocolVersion", negotiated);
+		JsonObject capabilities = new JsonObject();
+		capabilities.add("tools", new JsonObject());
+		result.add("capabilities", capabilities);
+		JsonObject serverInfo = new JsonObject();
+		serverInfo.addProperty("name", "minecraft-mcp");
+		serverInfo.addProperty("version", SERVER_VERSION);
+		result.add("serverInfo", serverInfo);
+		result.addProperty("instructions", INSTRUCTIONS);
+		return result;
+	}
+
+	/** Modern requests reach this with params.name confirmed by the Mcp-Name check; legacy ones send no such header, so check here. */
 	private static JsonObject callTool(JsonObject params) {
 		String name = stringField(params, "name");
+		if (name == null) {
+			throw new RequestError(200, INVALID_PARAMS, "params.name must be a string");
+		}
 		JsonElement arguments = params.get("arguments");
 		if (arguments != null && !arguments.isJsonObject()) {
 			throw new RequestError(200, INVALID_PARAMS, "params.arguments must be an object");
@@ -220,10 +293,21 @@ public final class McpHttpServer {
 		}
 	}
 
+	/** The mod version from the loader, with a fallback for when the loader isn't running (unit tests). */
+	private static final String SERVER_VERSION = determineServerVersion();
+
+	private static String determineServerVersion() {
+		try {
+			return MinecraftMcp.version();
+		} catch (RuntimeException | LinkageError e) {
+			return "dev";
+		}
+	}
+
 	private static JsonObject serverInfoMeta() {
 		JsonObject serverInfo = new JsonObject();
 		serverInfo.addProperty("name", "minecraft-mcp");
-		serverInfo.addProperty("version", MinecraftMcp.version());
+		serverInfo.addProperty("version", SERVER_VERSION);
 		JsonObject meta = new JsonObject();
 		meta.add("io.modelcontextprotocol/serverInfo", serverInfo);
 		return meta;

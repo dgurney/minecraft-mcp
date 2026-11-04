@@ -5,7 +5,7 @@ A Fabric client mod that runs an [MCP](https://modelcontextprotocol.io) server i
 > [!NOTE]
 > **Written with AI.** The code and docs were written by an AI coding agent (Claude Code), with me directing it and testing the result in game. I haven't reviewed the code line by line, so treat it accordingly.
 
-- Endpoint: `http://127.0.0.1:25599/mcp` (Streamable HTTP, MCP revision 2026-07-28 only)
+- Endpoint: `http://127.0.0.1:25599/mcp` (Streamable HTTP). MCP revision 2026-07-28 for modern clients; older clients on the 2025-03-26 – 2025-11-25 revisions (the `initialize` handshake) are also accepted.
 - Minecraft 26.3, Fabric Loader 0.19.0 or newer, Java 25. Fabric API is not needed.
 - Tested with Minecraft 26.3, Fabric Loader 0.19.0 and 0.20.0, and Java 25.
 
@@ -56,7 +56,7 @@ This one makes different trade-offs:
 
 - **Few, general tools.** Coding agents do well with little more than a shell, so this MCP server gives the agent the game's own general interfaces instead of a tool per action: commands, the keyboard and mouse, and the screen, plus fast read-only views of the world. Anything a player can do is in reach without a tool written for it.
 - **Nothing to set up.** One jar in the `mods` folder, without Fabric API, Node, a config file, a token or opening the world to LAN. The agent plays as you, not as a bot that joins, in your singleplayer worlds and on the servers you play on, with your permissions.
-- **The latest MCP revision.** It is a stateless server for MCP 2026-07-28 over Streamable HTTP, with no sessions to keep alive.
+- **The latest MCP revision.** It is a stateless server for MCP 2026-07-28 over Streamable HTTP, with no sessions to keep alive. Older MCP clients still work: a request without the 2026-07-28 body metadata is served per the older revisions (2025-03-26 to 2025-11-25), with their `initialize` handshake, no required headers, and none of the 2026-only result fields, while 2026-07-28 requests keep their strict header validation unchanged.
 
 ## Development
 
