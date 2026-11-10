@@ -56,7 +56,7 @@ This one makes different trade-offs:
 
 - **Few, general tools.** Coding agents do well with little more than a shell, so this MCP server gives the agent the game's own general interfaces instead of a tool per action: commands, the keyboard and mouse, and the screen, plus fast read-only views of the world. Anything a player can do is in reach without a tool written for it.
 - **Nothing to set up.** One jar in the `mods` folder, without Fabric API, Node, a config file, a token or opening the world to LAN. The agent plays as you, not as a bot that joins, in your singleplayer worlds and on the servers you play on, with your permissions.
-- **The latest MCP revision.** It is a stateless server for MCP 2026-07-28 over Streamable HTTP, with no sessions to keep alive.
+- **The latest MCP revision.** It is a stateless server for MCP 2026-07-28 over Streamable HTTP, with no sessions to keep alive. It is intentional that only the latest MCP revision is supported, I want to keep things as simple as possible. You are welcome to maintain your own fork if you require support for older MCP revisions. Let's also hope that harnesses stuck on the old revisions get with the times sooner rather than later.
 
 ## Development
 
