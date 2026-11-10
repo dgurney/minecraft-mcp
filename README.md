@@ -52,7 +52,7 @@ A Fabric client mod that runs an [MCP](https://modelcontextprotocol.io) server i
 - [yuniko-software/minecraft-mcp-server](https://github.com/yuniko-software/minecraft-mcp-server) is a Node MCP server that joins a world opened to LAN as a separate bot player through [Mineflayer](https://github.com/PrismarineJS/mineflayer), with a tool per bot action.
 - [denfry/mcpfabric](https://github.com/denfry/mcpfabric) is a Fabric and NeoForge mod with 50+ tools for many Minecraft versions, including dedicated servers, reached through a separate Node MCP server and a bearer token.
 
-This one makes different trade-offs:
+This one makes different decisions:
 
 - **Few, general tools.** Coding agents do well with little more than a shell, so this MCP server gives the agent the game's own general interfaces instead of a tool per action: commands, the keyboard and mouse, and the screen, plus fast read-only views of the world. Anything a player can do is in reach without a tool written for it.
 - **Nothing to set up.** One jar in the `mods` folder, without Fabric API, Node, a config file, a token or opening the world to LAN. The agent plays as you, not as a bot that joins, in your singleplayer worlds and on the servers you play on, with your permissions.
